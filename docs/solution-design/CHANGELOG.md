@@ -8,6 +8,12 @@ Versions follow [SemVer](https://semver.org) (`MAJOR.MINOR.PATCH`):
 
 Before 1.0.0 the design is a draft, so breaking changes raise MINOR. 1.0.0 will be the version the league signs off for the Phase 1 beta.
 
+## 0.4.1 — 2026-11-11
+
+- Changed the site colours to teal on a white page. Amber is now used only for warnings and risks.
+- Diagram boxes are now coloured by type: person, frontend, backend service, data store and external service ([legend](features/README.md#5-diagram-legend)).
+- The GitHub icon in the header now links to [mini-apps-org](https://github.com/mini-apps-org).
+
 ## 0.4.0 — 2026-11-11
 
 - Added this HTML site, with search, numbered sections and a full-screen diagram viewer.

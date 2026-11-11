@@ -15,7 +15,7 @@ features/
 
 Each epic README has a **features-by-phase** table and a **deep dive per phase**: component diagram, key sequence, data delta. Each feature file has its requirements, rules and logic, flow, UI, API and data, edge cases, acceptance criteria and, for Phase 1, the implementation gaps found in the repos. Phase 3 features (E12) are outlines.
 
-Snapshot: 2026-11-10, `league-be@444af15` · `league-fe@fc5bf84`. Parent design: [../README.md](../README.md).
+Snapshot: 2026-11-10, `league-be@444af15` · `league-fe@fc5bf84`. Parent design: [../README.md](../../../README.md).
 
 ## 1. Epics
 
