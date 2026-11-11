@@ -4,7 +4,7 @@
 |---|---|
 | **Product** | MViP (Mini Vietnamese Pool league): APA-style handicapped amateur pool league platform for Vietnam |
 | **Document type** | Solution design (deep dive) for software engineers |
-| **Status** | **0.4.1, 2026-11-11**: HTML site restyled ([change log](docs/solution-design/CHANGELOG.md)). Aligned with the repos on 2026-11-10 (`league-be@444af15`, tag 0.2.10 · `league-fe@fc5bf84`, tag 0.1.4) |
+| **Status** | **0.4.2, 2026-11-11**: HTML site restyled ([change log](docs/solution-design/CHANGELOG.md)). Aligned with the repos on 2026-11-10 (`league-be@444af15`, tag 0.2.10 · `league-fe@fc5bf84`, tag 0.1.4) |
 | **Repos** | [`mini-apps-org/league-be`](https://github.com/mini-apps-org/league-be) (Go API) · [`mini-apps-org/league-fe`](https://github.com/mini-apps-org/league-fe) (React SPA) |
 | **Frontend** | Vite 8 + React 19 + TypeScript 6, Tailwind 4, shadcn (`radix-nova`), TanStack Query 5, react-router 7, axios, i18next → **Vercel** (GitHub Actions, on tag) at `www.mvip-league.com` |
 | **Backend** | Go 1.26, `net/http` + gorilla/mux, pgx raw SQL, Google OIDC + cookie sessions, PostgreSQL (rules in triggers/functions) → image in **Artifact Registry**, **GKE** on GCP (`asia-southeast1`) at `be.mvip-league.com` |

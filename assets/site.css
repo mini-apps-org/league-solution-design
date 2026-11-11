@@ -17,7 +17,10 @@
   --heading: #0f766e;
   --summary-bg: #ccfbf1;
   --warn: #f59e0b;
-  --warn-bg: #fffbeb;
+  --warn-bg: #fef3c7;
+  --warn-line: #d97706;
+  --note-bg: #fefce8;
+  --note-line: #eab308;
   --mark: #ccfbf1;
   --diagram-card: #f8fafc;
   --shadow: 0 8px 28px rgba(15, 23, 42, .12);
@@ -38,7 +41,7 @@
   --bg: #0b1220; --bg-soft: #0f172a; --bg-code: #131c2e; --text: #e2e8f0; --text-soft: #cbd5e1;
   --muted: #94a3b8; --border: #1e293b; --border-strong: #334155; --brand: #14b8a6; --brand-ink: #042f2e;
   --accent: #2dd4bf; --accent-text: #5eead4; --accent-soft: #134e4a; --link: #5eead4; --link-line: #14b8a6;
-  --heading: #5eead4; --summary-bg: #0f3b38; --warn: #f59e0b; --warn-bg: #2a1f07; --mark: #134e4a;
+  --heading: #5eead4; --summary-bg: #0f3b38; --warn: #f59e0b; --warn-bg: #3a2408; --warn-line: #f59e0b; --note-bg: #2a2608; --note-line: #eab308; --mark: #134e4a;
   --diagram-card: #f8fafc; --shadow: 0 10px 30px rgba(0, 0, 0, .5);
   --b-green-bg: #134e4a; --b-green-fg: #99f6e4; --b-blue-bg: #0f172a; --b-blue-fg: #5eead4;
   --b-violet-bg: #1e293b; --b-violet-fg: #cbd5e1; --b-amber-bg: #3a2c08; --b-amber-fg: #fcd34d;
@@ -156,7 +159,6 @@ button { font: inherit; cursor: pointer; }
   border-radius: 0 8px 8px 0; color: var(--text-soft);
 }
 .doc blockquote p:last-child { margin-bottom: 0; }
-.doc blockquote.callout-warn { border-left-color: var(--warn); background: var(--warn-bg); color: var(--text); }
 .doc blockquote.callout-warn h2 { border: 0; margin: 0 0 8px; padding: 0; font-size: 19px; }
 
 .table-wrap { overflow-x: auto; margin: 0 0 20px; border: 1px solid var(--border); border-radius: 10px; }
@@ -341,7 +343,7 @@ a:hover { color: var(--link); text-decoration-color: var(--link-line); }
 .brand-name { color: var(--brand); }
 .doc h1, .doc h2 { color: var(--heading); }
 .secnum { color: var(--heading); opacity: .72; }
-.doc blockquote { background: var(--summary-bg); border-left-color: var(--brand); color: var(--text); }
+.doc blockquote { background: var(--note-bg); border-left-color: var(--note-line); color: var(--text); }
 .doc th { background: var(--brand); color: var(--brand-ink); border-bottom-color: var(--brand); }
 .sidebar a[aria-current="page"] { background: var(--accent-soft); color: var(--accent-text); box-shadow: inset 3px 0 0 var(--brand); }
 .toc a.active { border-left-color: var(--brand); }
@@ -352,3 +354,4 @@ a:hover { color: var(--link); text-decoration-color: var(--link-line); }
 .card-num { color: var(--brand); }
 .card:hover { border-color: var(--accent); }
 .pager a:hover { border-color: var(--accent); }
+.doc blockquote.callout-warn { border-left-color: var(--warn-line); background: var(--warn-bg); color: var(--text); }

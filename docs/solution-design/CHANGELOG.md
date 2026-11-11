@@ -8,6 +8,11 @@ Versions follow [SemVer](https://semver.org) (`MAJOR.MINOR.PATCH`):
 
 Before 1.0.0 the design is a draft, so breaking changes raise MINOR. 1.0.0 will be the version the league signs off for the Phase 1 beta.
 
+## 0.4.2 — 2026-11-11
+
+- Notes are now yellow, both on the pages and in diagrams. Warnings stay amber.
+- The HTML site moved to the repo root, so GitHub Pages URLs no longer include `docs/solution-design/html/`.
+
 ## 0.4.1 — 2026-11-11
 
 - Changed the site colours to teal on a white page. Amber is now used only for warnings and risks.
