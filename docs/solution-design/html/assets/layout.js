@@ -32,10 +32,7 @@
     '<input id="search" type="search" placeholder="Search docs: rules, features, endpoints" autocomplete="off" aria-label="Search the documentation" aria-controls="search-results">' +
     '<kbd>/</kbd><div id="search-results" class="search-results" role="listbox" hidden></div></div>' +
     '<nav class="top-links">' +
-    '<details class="gh"><summary aria-label="GitHub repositories" title="GitHub repositories">' + githubMark + '</summary>' +
-    '<div class="gh-menu">' + site.repos.map(function (r) {
-      return '<a href="' + r.url + '" target="_blank" rel="noopener"><strong>' + esc(r.name) + '</strong><span>' + esc(r.desc) + '</span></a>';
-    }).join('') + '</div></details>' +
+    '<a class="gh" href="' + site.github.url + '" target="_blank" rel="noopener" aria-label="GitHub: ' + esc(site.github.name) + '" title="GitHub: ' + esc(site.github.name) + '">' + githubMark + '</a>' +
     '<button class="theme-btn" type="button">Dark</button>' +
     '</nav></header>';
 
@@ -90,10 +87,6 @@
   main.insertAdjacentHTML('afterbegin', crumbs);
   main.insertAdjacentHTML('beforeend', pager);
   shell.insertAdjacentHTML('afterend', footer);
-
-  var gh = document.querySelector('.gh');
-  document.addEventListener('click', function (e) { if (gh.open && !gh.contains(e.target)) gh.open = false; });
-  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && gh.open) { gh.open = false; gh.querySelector('summary').focus(); } });
 
   var resizer = shell.querySelector('.sidebar-resizer');
   var docEl = document.documentElement;

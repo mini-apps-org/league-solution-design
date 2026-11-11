@@ -14,7 +14,7 @@
 
 <h2 id="0-phase-1-mvp-result-entry"><span class="secnum">8.0</span> Phase 1 (MVP): result entry</h2>
 <p>The MVP does <strong>not</strong> score shot by shot. The captain enters each individual match&#39;s final numbers, and Postgres does the rest (<span class="badge b-planned">Planned</span><code>00002_business_rules.sql</code>, see <a href="06-data-model.html#b--planned-00002_business_rulessql-per-plan-2-must-be-restored">06 §B</a>).</p>
-<figure class="diagram"><a class="diagram-img" href="assets/diagrams/08-scorekeeping-engine-1.svg" target="_blank" aria-label="Open diagram full screen"><img src="assets/diagrams/08-scorekeeping-engine-1.svg" alt="Diagram: 08 - Scorekeeping Engine" loading="lazy" data-diagram-file="08-scorekeeping-engine-1.svg" width="1523" height="912"></a><figcaption><span></span><a class="full" href="assets/diagrams/08-scorekeeping-engine-1.svg" target="_blank">Open full screen</a></figcaption></figure>
+<figure class="diagram"><a class="diagram-img" href="assets/diagrams/08-scorekeeping-engine-1.svg" target="_blank" aria-label="Open diagram full screen"><img src="assets/diagrams/08-scorekeeping-engine-1.svg" alt="Diagram: 08 - Scorekeeping Engine" loading="lazy" data-diagram-file="08-scorekeeping-engine-1.svg" width="1523" height="910"></a><figcaption><span></span><a class="full" href="assets/diagrams/08-scorekeeping-engine-1.svg" target="_blank">Open full screen</a></figcaption></figure>
 
 
 <div class="table-wrap"><table>
@@ -57,7 +57,7 @@
 <li><strong>Single active scoring device per individual match</strong> (lease), with read-only live viewers.</li>
 </ol>
 <h2 id="2-team-match-lifecycle"><span class="secnum">8.2</span> Team match lifecycle</h2>
-<figure class="diagram"><a class="diagram-img" href="assets/diagrams/08-scorekeeping-engine-2.svg" target="_blank" aria-label="Open diagram full screen"><img src="assets/diagrams/08-scorekeeping-engine-2.svg" alt="Diagram: 08 - Scorekeeping Engine" loading="lazy" data-diagram-file="08-scorekeeping-engine-2.svg" width="1018" height="1324"></a><figcaption><span></span><a class="full" href="assets/diagrams/08-scorekeeping-engine-2.svg" target="_blank">Open full screen</a></figcaption></figure>
+<figure class="diagram"><a class="diagram-img" href="assets/diagrams/08-scorekeeping-engine-2.svg" target="_blank" aria-label="Open diagram full screen"><img src="assets/diagrams/08-scorekeeping-engine-2.svg" alt="Diagram: 08 - Scorekeeping Engine" loading="lazy" data-diagram-file="08-scorekeeping-engine-2.svg" width="961" height="1202"></a><figcaption><span></span><a class="full" href="assets/diagrams/08-scorekeeping-engine-2.svg" target="_blank">Open full screen</a></figcaption></figure>
 
 
 <h2 id="3-event-catalogue"><span class="secnum">8.3</span> Event catalogue</h2>
@@ -283,7 +283,7 @@ on DEAD_BALL(ball): assert ball != 9; rack.balls[ball] = 'dead'</code></pre></di
 <p>A real snapshot has 5 items in <code>matches</code> (orders 1–5). Only order 1 is shown here. Keys are sorted and whitespace is removed before hashing, so formatting never changes the hash.</p>
 <p><code>snapshot_hash = sha256(canonical_json)</code>. Each captain&#39;s app shows the summary (mirrors Foundation #3/#4) and sends <code>VERIFY {decision, snapshotHash}</code>. If both CONFIRM with an equal hash → FINALIZED, bonus applied (R-110). In Phase 2 dual-device mode, each team&#39;s scorer keeps its own event stream. The server diffs the projections and produces <code>disputes.diff</code> if they differ.</p>
 <h2 id="7-post-finalization-pipeline"><span class="secnum">8.7</span> Post-finalization pipeline</h2>
-<figure class="diagram"><a class="diagram-img" href="assets/diagrams/08-scorekeeping-engine-4.svg" target="_blank" aria-label="Open diagram full screen"><img src="assets/diagrams/08-scorekeeping-engine-4.svg" alt="Diagram: 08 - Scorekeeping Engine" loading="lazy" data-diagram-file="08-scorekeeping-engine-4.svg" width="895" height="734"></a><figcaption><span></span><a class="full" href="assets/diagrams/08-scorekeeping-engine-4.svg" target="_blank">Open full screen</a></figcaption></figure>
+<figure class="diagram"><a class="diagram-img" href="assets/diagrams/08-scorekeeping-engine-4.svg" target="_blank" aria-label="Open diagram full screen"><img src="assets/diagrams/08-scorekeeping-engine-4.svg" alt="Diagram: 08 - Scorekeeping Engine" loading="lazy" data-diagram-file="08-scorekeeping-engine-4.svg" width="852" height="677"></a><figcaption><span></span><a class="full" href="assets/diagrams/08-scorekeeping-engine-4.svg" target="_blank">Open full screen</a></figcaption></figure>
 
 
 <p>The transactional <strong>outbox pattern</strong> (an <code>outbox</code> table written in the finalize transaction and polled by the worker) guarantees at-least-once processing. Consumers are idempotent.</p>
