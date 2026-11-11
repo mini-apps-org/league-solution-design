@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>05 - Solution Architecture · MViP Solution Design</title>
+<link rel="stylesheet" href="assets/site.css">
+<script src="assets/boot.js"></script>
+</head>
+<body data-root="" data-page="05-architecture.html">
+<main id="main" class="content">
+<article class="doc">
+<h1>05 - Solution Architecture</h1>
+
+<blockquote>
+<p><span class="badge b-built">Built</span> as-built · <span class="badge b-planned">Planned</span> MVP · <span class="badge b-target">Target</span></p>
+</blockquote>
+<h2 id="1-technology-stack"><span class="secnum">5.1</span> Technology stack</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Layer</th>
+<th>As-built (<span class="badge b-built">Built</span>)</th>
+<th>Target additions (<span class="badge b-target">Target</span>)</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Frontend</td>
+<td><code>league-fe</code>: single <strong>Vite 8 + React 19</strong> SPA, TypeScript 6, <strong>Tailwind 4</strong>, <strong>shadcn</strong> (<code>radix-nova</code>), <strong>TanStack Query 5</strong>, <strong>react-router 7</strong>, axios, i18next</td>
+<td>Generated API types; live-scoring state store; Zalo Mini App build</td>
+</tr>
+<tr>
+<td>FE hosting</td>
+<td><strong>Vercel</strong>, deployed by <strong>GitHub Actions</strong> on a version tag (<code>vercel deploy --prebuilt --prod</code>); git deploys off</td>
+<td>Preview deploys per PR</td>
+</tr>
+<tr>
+<td>Backend</td>
+<td><code>league-be</code>: <strong>Go 1.26</strong>, <code>net/http</code> + <strong>gorilla/mux</strong>, <strong>pgx/v5 raw SQL</strong>, Google OIDC (go-oidc + oauth2), viper, swaggo</td>
+<td><code>internal/league</code> (<span class="badge b-planned">Planned</span>), <code>internal/scoring</code>, worker</td>
+</tr>
+<tr>
+<td>Database</td>
+<td><strong>PostgreSQL</strong>. Business rules in <strong>triggers and functions</strong> (<span class="badge b-planned">Planned</span><code>00002</code>)</td>
+<td>Cloud SQL HA, PITR</td>
+</tr>
+<tr>
+<td>Cache / realtime</td>
+<td>—</td>
+<td><strong>Redis</strong> (Memorystore) for live scoring, rate limiting</td>
+</tr>
+<tr>
+<td>Container</td>
+<td>Docker multi-stage → distroless nonroot; image in <strong>Artifact Registry</strong> <code>asia-southeast1-docker.pkg.dev/vincent-mini-apps-project/league-repository/league-service:&lt;tag&gt;</code></td>
+<td>—</td>
+</tr>
+<tr>
+<td>Runtime</td>
+<td>GKE (e2-medium nodes, per Makefile comments). <strong>No deploy manifests in the repo</strong></td>
+<td>Helm/Kustomize, migration Job, HPA</td>
+</tr>
+<tr>
+<td>Edge / DNS</td>
+<td><strong>Cloudflare</strong>: <code>www.mvip-league.com</code> (FE), <code>be.mvip-league.com</code> (API)</td>
+<td>WAF rules, cache rules</td>
+</tr>
+<tr>
+<td>Repos</td>
+<td>Two repos: <code>league-fe</code>, <code>league-be</code> (GitHub org <code>mini-apps-org</code>)</td>
+<td><code>league-infra</code> (Terraform)</td>
+</tr>
+</tbody></table></div>
+<h2 id="2-system-context"><span class="secnum">5.2</span> System context</h2>
+<figure class="diagram"><a class="diagram-img" href="assets/diagrams/05-architecture-1.svg" target="_blank" aria-label="Open diagram full screen"><img src="assets/diagrams/05-architecture-1.svg" alt="Diagram: 05 - Solution Architecture" loading="lazy" data-diagram-file="05-architecture-1.svg" width="1352" height="489"></a><figcaption><span></span><a class="full" href="assets/diagrams/05-architecture-1.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h2 id="3-containers-and-deployment"><span class="secnum">5.3</span> Containers and deployment</h2>
+<figure class="diagram"><a class="diagram-img" href="assets/diagrams/05-architecture-2.svg" target="_blank" aria-label="Open diagram full screen"><img src="assets/diagrams/05-architecture-2.svg" alt="Diagram: 05 - Solution Architecture" loading="lazy" data-diagram-file="05-architecture-2.svg" width="810" height="772"></a><figcaption><span></span><a class="full" href="assets/diagrams/05-architecture-2.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<p><strong>Cookie topology.</strong> The FE and API are different hosts under one registrable domain (<code>mvip-league.com</code>):</p>
+<ul>
+<li><code>__Host-sid</code> is locked to <code>be.mvip-league.com</code> (HttpOnly).</li>
+<li><code>__Secure-csrf</code> is scoped to <code>Domain=mvip-league.com</code>, so the SPA on <code>www.</code> can read it and echo it in <code>X-CSRF-Token</code>.</li>
+</ul>
+<p>Both use <code>SameSite=Lax</code>, which works because the two hosts are same-site.</p>
+<h2 id="4-backend-module-map"><span class="secnum">5.4</span> Backend module map</h2>
+<figure class="diagram"><a class="diagram-img" href="assets/diagrams/05-architecture-3.svg" target="_blank" aria-label="Open diagram full screen"><img src="assets/diagrams/05-architecture-3.svg" alt="Diagram: 05 - Solution Architecture" loading="lazy" data-diagram-file="05-architecture-3.svg" width="965" height="719"></a><figcaption><span></span><a class="full" href="assets/diagrams/05-architecture-3.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<ul>
+<li>One deployable Go service (a modular monolith). Modules expose <code>Service</code>/<code>Repository</code> interfaces.</li>
+<li><strong>Rules live in Postgres.</strong> Go decides <em>who</em> may act (roles, captain-owns-night); SQL decides <em>what the numbers are</em>.</li>
+</ul>
+<h2 id="5-request-lifecycle-"><span class="secnum">5.5</span> Request lifecycle (<span class="badge b-built">Built</span>)</h2>
+<figure class="diagram"><a class="diagram-img" href="assets/diagrams/05-architecture-4.svg" target="_blank" aria-label="Open diagram full screen"><img src="assets/diagrams/05-architecture-4.svg" alt="Diagram: 05 - Solution Architecture" loading="lazy" data-diagram-file="05-architecture-4.svg" width="1394" height="539"></a><figcaption><span></span><a class="full" href="assets/diagrams/05-architecture-4.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h2 id="6--phase-2-realtime-and-offline"><span class="secnum">5.6</span> <span class="badge b-target">Target</span> Phase 2: realtime and offline</h2>
+<p>The live-scoring design (event log, scoring lease, Redis pub/sub, WebSocket fan-out, IndexedDB offline queue) is in <a href="08-scorekeeping-engine.html">08</a>. Constraints from the as-built system:</p>
+<ul>
+<li>Writes stay HTTP + cookies + CSRF.</li>
+<li>WebSocket auth uses the same <code>sid</code> cookie (same-site), with no bearer tokens.</li>
+<li>Idempotency keys travel in the request body, not in headers (keeps the CORS allow-list unchanged).</li>
+<li>The service worker keeps never caching HTML or API responses. Offline data goes to IndexedDB keyed by user.</li>
+</ul>
+<h2 id="7-architecture-decisions"><span class="secnum">5.7</span> Architecture decisions</h2>
+<p>These are the decisions already made in the repos. Record them as ADRs in each repo.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ADR</th>
+<th>Decision</th>
+<th>Rationale</th>
+<th>Source</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">ADR-001</td>
+<td><code>net/http</code> + <strong>gorilla/mux</strong>, not a full framework</td>
+<td>Thin handlers, stdlib middleware</td>
+<td><code>league-be/go.mod</code></td>
+</tr>
+<tr>
+<td class="nw">ADR-002</td>
+<td><strong>Raw SQL with pgx</strong>, house convention (<code>const query</code> + named <code>args []any</code>), no ORM/sqlc</td>
+<td>Rules-critical SQL stays explicit and reviewable</td>
+<td><code>.claude/rules/database.md</code></td>
+</tr>
+<tr>
+<td class="nw">ADR-003</td>
+<td><strong>Opaque server-side sessions in cookies</strong>, not JWT + refresh</td>
+<td>Revocable sessions, nothing in JS storage; the cost is CSRF, handled by double-submit</td>
+<td><code>internal/auth/README.md</code></td>
+</tr>
+<tr>
+<td class="nw">ADR-004</td>
+<td><strong>Business rules in Postgres</strong> triggers/functions; the TS mirror is only a preview</td>
+<td>A manual SQL correction gives the same numbers as the app; one source of truth. Revisit for live scoring</td>
+<td>plan.md, plan-2</td>
+</tr>
+<tr>
+<td class="nw">ADR-005</td>
+<td><strong>SL and race are snapshotted</strong> at put-up</td>
+<td>A later SL change never rewrites a played match</td>
+<td><code>individual_matches</code> columns</td>
+</tr>
+<tr>
+<td class="nw">ADR-006</td>
+<td><strong>RBAC tables</strong> (<code>roles</code>, <code>permissions</code>, <code>users_roles</code>), no <code>users.role</code> column</td>
+<td>One source of truth; <code>/me</code> derives the role by precedence</td>
+<td>plan-1</td>
+</tr>
+<tr>
+<td class="nw">ADR-007</td>
+<td><strong><code>app-id</code> header retired</strong> (codes 40002/40303 retired)</td>
+<td>One app, own database; GETs stay CORS-simple (no preflight)</td>
+<td>plan-3</td>
+</tr>
+<tr>
+<td class="nw">ADR-008</td>
+<td><strong>Closed dependency list</strong> in the FE</td>
+<td>Small surface; additions need approval</td>
+<td>plan.md</td>
+</tr>
+<tr>
+<td class="nw">ADR-009</td>
+<td><strong>Google sign-in only</strong> for the MVP; users link their member ID at onboarding</td>
+<td>Fastest secure login; Zalo/OTP deferred</td>
+<td>plan-4, login plan</td>
+</tr>
+<tr>
+<td class="nw">ADR-010</td>
+<td><strong>Release by version tag</strong> (<code>*.*.*</code>) in both repos</td>
+<td>Explicit, auditable releases; FE guard requires the tag on <code>master</code></td>
+<td><code>cd.yaml</code>, <code>release.yaml</code></td>
+</tr>
+<tr>
+<td class="nw">ADR-011</td>
+<td>UUID v4 for league entities, <strong>TEXT</strong> ids for <code>users</code>/<code>sessions</code></td>
+<td>Matches <code>auth.User.ID string</code>; avoids retyping auth code</td>
+<td><code>00001_init.sql</code></td>
+</tr>
+<tr>
+<td class="nw">ADR-012</td>
+<td>Event-sourced live scoring with Redis</td>
+<td><span class="badge b-target">Target</span> Proposed for Phase 2, not yet accepted</td>
+<td><a href="08-scorekeeping-engine.html">08</a></td>
+</tr>
+</tbody></table></div>
+
+</article>
+</main>
+<script src="assets/site-data.js"></script>
+<script src="assets/layout.js"></script>
+<script src="assets/search-index.js"></script>
+<script src="assets/site.js"></script>
+</body>
+</html>

@@ -1,0 +1,383 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>23 - Profile &amp; Standings · MViP Solution Design</title>
+<link rel="stylesheet" href="../assets/site.css">
+<script src="../assets/boot.js"></script>
+</head>
+<body data-root="../" data-page="features/E10-insights.html">
+<main id="main" class="content">
+<article class="doc">
+<h1>23 - Profile &amp; Standings</h1>
+<p class="lede">Epic E10 · 2 features</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Goal</strong></td>
+<td>Players see their own record and achievements; everyone, signed in or not, sees division standings and results</td>
+</tr>
+<tr>
+<td><strong>Phase</strong></td>
+<td>2</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><span class="badge b-target">Target</span> Not started. Phase 1 already computes <code>player_division_stats</code> and <code>team_standings</code> (E02-F8) and shows per-session stats in the roster (E03-F12)</td>
+</tr>
+<tr>
+<td><strong>Actors</strong></td>
+<td>Player, Captain, Public visitor</td>
+</tr>
+<tr>
+<td><strong>Related</strong></td>
+<td><a href="../04-domain-rules.html">04 §12, §13</a> · <a href="../06-data-model.html">06 views</a> · <a href="../08-scorekeeping-engine.html">08 §7</a></td>
+</tr>
+</tbody></table></div>
+<h2 id="features-by-phase"><span class="secnum">23.1</span> Features by phase</h2>
+<h3 id="phase-1"><span class="secnum">23.1.1</span> Phase 1</h3>
+<p>The data exists but no dedicated screen: roster rows show MW/MP and points for the session.</p>
+<h3 id="phase-2"><span class="secnum">23.1.2</span> Phase 2</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>Feature</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">F34</td>
+<td><a href="E10-insights.html#f34">Player profile</a></td>
+<td><span class="badge b-target">Target</span></td>
+</tr>
+<tr>
+<td class="nw">F35</td>
+<td><a href="E10-insights.html#f35">Public standings</a></td>
+<td><span class="badge b-target">Target</span></td>
+</tr>
+</tbody></table></div>
+<h2 id="phase-2-deep-dive"><span class="secnum">23.2</span> Phase 2 deep dive</h2>
+<h3 id="where-the-numbers-come-from"><span class="secnum">23.2.1</span> Where the numbers come from</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E10-insights-1.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E10-insights-1.svg" alt="Diagram: 23 - Profile &amp; Standings" loading="lazy" data-diagram-file="features_E10-insights-1.svg" width="630" height="522"></a><figcaption><span>Session numbers come from live views (always exact). Lifetime numbers come from a materialized view refreshed by the worker after each finalized night.</span><a class="full" href="../assets/diagrams/features_E10-insights-1.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="components"><span class="secnum">23.2.2</span> Components</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E10-insights-2.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E10-insights-2.svg" alt="Diagram: 23 - Profile &amp; Standings" loading="lazy" data-diagram-file="features_E10-insights-2.svg" width="1293" height="376"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_E10-insights-2.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="data-delta"><span class="secnum">23.2.3</span> Data delta</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Object</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>mv_player_lifetime (player_id, format, mp, mw, win_pct, ds_avg, br, eob, nob, rackless, double_strike, last_played_at, mp_2y)</code></td>
+<td>Lifetime profile metrics</td>
+</tr>
+<tr>
+<td><code>team_standings</code> view</td>
+<td>+ bonus, + tie-break columns (points, then match wins, then head-to-head)</td>
+</tr>
+<tr>
+<td><code>players.profile_visibility</code></td>
+<td><code>league</code> (default) · <code>public</code> · <code>private</code></td>
+</tr>
+<tr>
+<td>Public routes under <code>/api/v1/public/*</code></td>
+<td>No cookie, no CSRF, cacheable, only public fields</td>
+</tr>
+</tbody></table></div>
+
+<h2 id="f34"><span class="secnum">23.3</span> F34 — Player profile</h2>
+<section class="feature"><div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>Status</th>
+<th>Rules</th>
+<th>Repo refs</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>2</td>
+<td><span class="badge b-target">Target</span></td>
+<td><a href="../04-domain-rules.html">04 §9, §12</a></td>
+<td>Phase 1 data: <code>player_division_stats</code> view, <code>players_stats</code> (E02-F8)</td>
+</tr>
+</tbody></table></div>
+<h3 id="f34-requirements"><span class="secnum">23.3.1</span> Requirements</h3>
+<p><em>As a player, I open my profile and see my current SL per format, my record this session and overall, my achievements, and my recent matches.</em></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Requirement</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">FR-34.1</td>
+<td>Route <code>/players/:memberId</code>; &quot;My profile&quot; in the header menu opens the signed-in user&#39;s own</td>
+</tr>
+<tr>
+<td class="nw">FR-34.2</td>
+<td>Header: name, member ID, current SL per format, team(s) this session, paid status (own profile and admins only)</td>
+</tr>
+<tr>
+<td class="nw">FR-34.3</td>
+<td><strong>Session</strong> card (per division): MP, MW, Win % (2 decimals), total points, PPM, % points available (PA = 3 for 8-Ball, 20 for 9-Ball)</td>
+</tr>
+<tr>
+<td class="nw">FR-34.4</td>
+<td><strong>Lifetime</strong> card: MP, MW, Win %, DS average, matches in the last 2 years, last date played</td>
+</tr>
+<tr>
+<td class="nw">FR-34.5</td>
+<td><strong>Achievements</strong>: counters for BR, 8OB, 9OB, Rackless, Double-strike, with the date of the latest</td>
+</tr>
+<tr>
+<td class="nw">FR-34.6</td>
+<td><strong>Recent matches</strong>: last 10 individual matches with opponent, SLs, score (games or points/target), points, result chip; tap opens the night breakdown</td>
+</tr>
+<tr>
+<td class="nw">FR-34.7</td>
+<td><strong>SL history</strong> (own profile and admins): date, format, old → new, reason</td>
+</tr>
+<tr>
+<td class="nw">FR-34.8</td>
+<td>Visibility: <code>league</code> (signed-in users) by default; the player can choose <code>public</code> or <code>private</code> (name and stats visible only to them and admins)</td>
+</tr>
+<tr>
+<td class="nw">FR-34.9</td>
+<td>Forfeits are excluded from MP and Win % (04 §12)</td>
+</tr>
+</tbody></table></div>
+<h3 id="f34-logic-metric-formulas"><span class="secnum">23.3.2</span> Logic: metric formulas</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Metric</th>
+<th>Formula</th>
+<th>Example (04 §12)</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Win %</td>
+<td><code>MW ÷ MP × 100</code></td>
+<td>3 / 7 = 42.86 %</td>
+</tr>
+<tr>
+<td>PPM</td>
+<td><code>total points ÷ MP</code></td>
+<td>7 / 7 = 1.00</td>
+</tr>
+<tr>
+<td>% PA</td>
+<td><code>total points ÷ (MP × PA)</code></td>
+<td>7 / 21 = 33 %</td>
+</tr>
+<tr>
+<td>DS avg</td>
+<td><code>Σ DS ÷ MP</code></td>
+<td>—</td>
+</tr>
+</tbody></table></div>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E10-insights-f34-1.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E10-insights-f34-1.svg" alt="Diagram: 23 - Profile &amp; Standings" loading="lazy" data-diagram-file="features_E10-insights-f34-1.svg" width="695" height="1118"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_E10-insights-f34-1.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="f34-flow"><span class="secnum">23.3.3</span> Flow</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E10-insights-f34-2.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E10-insights-f34-2.svg" alt="Diagram: 23 - Profile &amp; Standings" loading="lazy" data-diagram-file="features_E10-insights-f34-2.svg" width="1494" height="421"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_E10-insights-f34-2.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="f34-api--data"><span class="secnum">23.3.4</span> API &amp; data</h3>
+<div class="code"><span class="code-lang">json</span><button class="copy" type="button">Copy</button><pre><code class="lang-json">{
+  &quot;memberId&quot;: &quot;26110042&quot;,
+  &quot;name&quot;: &quot;&lt;player name&gt;&quot;,
+  &quot;skillLevels&quot;: [{ &quot;format&quot;: &quot;8_ball&quot;, &quot;sl&quot;: 5 }],
+  &quot;session&quot;: { &quot;divisionId&quot;: &quot;&lt;division-uuid&gt;&quot;, &quot;mp&quot;: 7, &quot;mw&quot;: 3, &quot;winPct&quot;: 42.86, &quot;points&quot;: 7, &quot;ppm&quot;: 1.0, &quot;pctPointsAvailable&quot;: 33.33 },
+  &quot;lifetime&quot;: { &quot;mp&quot;: 54, &quot;mw&quot;: 29, &quot;winPct&quot;: 53.7, &quot;dsAvg&quot;: 0.8, &quot;mpLast2y&quot;: 41, &quot;lastPlayedAt&quot;: &quot;2026-11-03&quot; },
+  &quot;accolades&quot;: { &quot;BR&quot;: 2, &quot;8OB&quot;: 1, &quot;9OB&quot;: 0, &quot;RACKLESS&quot;: 3, &quot;DOUBLE_STRIKE&quot;: 0 },
+  &quot;recent&quot;: []
+}</code></pre></div>
+<h3 id="f34-edge-cases"><span class="secnum">23.3.5</span> Edge cases</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Situation</th>
+<th>Expected</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">EC-34.1</td>
+<td>MP = 0</td>
+<td>Win %, PPM and % PA show &quot;—&quot;, never NaN or 0 %</td>
+</tr>
+<tr>
+<td class="nw">EC-34.2</td>
+<td>Player on two teams in different divisions</td>
+<td>One session card per division</td>
+</tr>
+<tr>
+<td class="nw">EC-34.3</td>
+<td>Lifetime view not yet refreshed after tonight</td>
+<td>The session card is live; lifetime shows &quot;Updated {time}&quot;</td>
+</tr>
+</tbody></table></div>
+<h3 id="f34-acceptance-criteria"><span class="secnum">23.3.6</span> Acceptance criteria</h3>
+<ul>
+<li><strong>AC-34.1</strong> Given 3 wins in 7 matches and 7 points in 8-Ball, then the session card shows 42.86 %, 1.00 and 33 %.</li>
+<li><strong>AC-34.2</strong> Given a private profile, when another player opens it, then stats are hidden.</li>
+</ul>
+<h3 id="f34-open-questions"><span class="secnum">23.3.7</span> Open questions</h3>
+<ul>
+<li>Should lifetime stats include matches from before the app (paper records)?</li>
+</ul>
+</section>
+
+<h2 id="f35"><span class="secnum">23.4</span> F35 — Public standings</h2>
+<section class="feature"><div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>Status</th>
+<th>Rules</th>
+<th>Repo refs</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>2</td>
+<td><span class="badge b-target">Target</span></td>
+<td>R-110, R-140–R-145 · <a href="../04-domain-rules.html">04 §13</a></td>
+<td>Phase 1 data: <code>team_standings</code> view (E02-F8)</td>
+</tr>
+</tbody></table></div>
+<h3 id="f35-requirements"><span class="secnum">23.4.1</span> Requirements</h3>
+<p><em>As anyone, players, friends or venue owners, I open a link and see the division table and every result, without signing in.</em></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Requirement</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">FR-35.1</td>
+<td>Public routes <code>/standings/:divisionId</code> and <code>/teams/:teamNumber</code> that work without a session</td>
+</tr>
+<tr>
+<td class="nw">FR-35.2</td>
+<td>Standings table: rank, team number + name, nights played, team points (including bonus), bonus, match wins, Win %. Sorted by points, then match wins, then head-to-head points</td>
+</tr>
+<tr>
+<td class="nw">FR-35.3</td>
+<td>Results list per team, sorted by date (R-145): opponent, final score, date, venue; completed cards are green for the winner (R-140); upcoming cards show a blue date and time with the score hidden (R-141); bye and no-play are neutral, non-clickable (R-142)</td>
+</tr>
+<tr>
+<td class="nw">FR-35.4</td>
+<td>Tapping a completed result opens the public night breakdown (R-144): totals with a crown, five match blocks with name, SL, LAG badge and games or points</td>
+</tr>
+<tr>
+<td class="nw">FR-35.5</td>
+<td>Only nights in <code>finalized</code> or <code>finalized_no_bonus</code> count (E08); in Phase 1 mode, <code>submitted</code></td>
+</tr>
+<tr>
+<td class="nw">FR-35.6</td>
+<td>Public payloads never include emails, user IDs, paid status or private-profile stats (those players show as &quot;Player {memberId}&quot;)</td>
+</tr>
+<tr>
+<td class="nw">FR-35.7</td>
+<td><code>Cache-Control: public, max-age=60, stale-while-revalidate=300</code>; Cloudflare caches it; a finalized night purges the division&#39;s keys (worker)</td>
+</tr>
+<tr>
+<td class="nw">FR-35.8</td>
+<td>Share button uses the Web Share API with the canonical URL; Open Graph tags give a readable preview in Zalo/Facebook</td>
+</tr>
+</tbody></table></div>
+<h3 id="f35-logic-ranking"><span class="secnum">23.4.2</span> Logic: ranking</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E10-insights-f35-1.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E10-insights-f35-1.svg" alt="Diagram: 23 - Profile &amp; Standings" loading="lazy" data-diagram-file="features_E10-insights-f35-1.svg" width="399" height="932"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_E10-insights-f35-1.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="f35-flow"><span class="secnum">23.4.3</span> Flow</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E10-insights-f35-2.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E10-insights-f35-2.svg" alt="Diagram: 23 - Profile &amp; Standings" loading="lazy" data-diagram-file="features_E10-insights-f35-2.svg" width="1276" height="609"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_E10-insights-f35-2.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="f35-ui"><span class="secnum">23.4.4</span> UI</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>State</th>
+<th>Shown</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Loading</td>
+<td>Table skeleton with 8 rows</td>
+</tr>
+<tr>
+<td>Empty</td>
+<td>&quot;No results yet this session&quot;</td>
+</tr>
+<tr>
+<td>Unknown division</td>
+<td>404 page with a link to the schedule</td>
+</tr>
+<tr>
+<td>≥ 1024 px</td>
+<td>Standings on the left, the selected team&#39;s results on the right</td>
+</tr>
+</tbody></table></div>
+<h3 id="f35-edge-cases"><span class="secnum">23.4.5</span> Edge cases</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Situation</th>
+<th>Expected</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">EC-35.1</td>
+<td>A dispute is pending</td>
+<td>That night isn&#39;t counted; the card shows &quot;Under review&quot;</td>
+</tr>
+<tr>
+<td class="nw">EC-35.2</td>
+<td>Admin correction after finalize</td>
+<td>Purge and recompute</td>
+</tr>
+<tr>
+<td class="nw">EC-35.3</td>
+<td>A team withdraws mid-season</td>
+<td>Kept in the table, marked &quot;Withdrawn&quot; (policy question)</td>
+</tr>
+</tbody></table></div>
+<h3 id="f35-acceptance-criteria"><span class="secnum">23.4.6</span> Acceptance criteria</h3>
+<ul>
+<li><strong>AC-35.1</strong> Given no cookie, when the standings URL is opened, then the table renders.</li>
+<li><strong>AC-35.2</strong> Given a public payload, then it contains no <code>email</code>, <code>userId</code> or <code>paid</code> fields (contract test).</li>
+<li><strong>AC-35.3</strong> Given a newly finalized night, then the standings reflect it within 2 minutes.</li>
+</ul>
+<h3 id="f35-open-questions"><span class="secnum">23.4.7</span> Open questions</h3>
+<ul>
+<li>Tie-break order: is head-to-head the league&#39;s rule?</li>
+</ul>
+</section>
+
+</article>
+</main>
+<script src="../assets/site-data.js"></script>
+<script src="../assets/layout.js"></script>
+<script src="../assets/search-index.js"></script>
+<script src="../assets/site.js"></script>
+</body>
+</html>

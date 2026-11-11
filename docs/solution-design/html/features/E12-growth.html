@@ -1,0 +1,607 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>25 - Growth · MViP Solution Design</title>
+<link rel="stylesheet" href="../assets/site.css">
+<script src="../assets/boot.js"></script>
+</head>
+<body data-root="../" data-page="features/E12-growth.html">
+<main id="main" class="content">
+<article class="doc">
+<h1>25 - Growth</h1>
+<p class="lede">Epic E12 · 8 features</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Goal</strong></td>
+<td>Grow from one league to many: more formats and divisions, tournaments, venue and sponsor value, and protection of the handicap system</td>
+</tr>
+<tr>
+<td><strong>Phase</strong></td>
+<td>3 (outline level: requirements, key rules, one diagram, open questions; no acceptance criteria yet)</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><span class="badge b-target">Target</span> Not started. Each item needs a discovery pass before it gets a full spec</td>
+</tr>
+<tr>
+<td><strong>Actors</strong></td>
+<td>League Operator (LO), Venue owner, Sponsor, Player, Admin</td>
+</tr>
+<tr>
+<td><strong>Related</strong></td>
+<td><a href="../03-scope-and-phases.html">03 scope &amp; phases</a> · <a href="../04-domain-rules.html">04 §1, §10, §12</a> · <a href="../14-open-questions.html">26 open questions</a></td>
+</tr>
+</tbody></table></div>
+<h2 id="features-by-phase"><span class="secnum">25.1</span> Features by phase</h2>
+<h3 id="phase-12"><span class="secnum">25.1.1</span> Phase 1–2</h3>
+<p>Nothing. Phase 1–2 decisions that keep these doors open: UUID keys everywhere, <code>format</code> on divisions (F32), the event log (E07), the outbox (F42), and RBAC tables (F6).</p>
+<h3 id="phase-3"><span class="secnum">25.1.2</span> Phase 3</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>Feature</th>
+<th>Depends on</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">F47</td>
+<td><a href="E12-growth.html#f47">Master division</a></td>
+<td class="nw">F32</td>
+<td><span class="badge b-target">Target</span></td>
+</tr>
+<tr>
+<td class="nw">F48</td>
+<td><a href="E12-growth.html#f48">Tournaments &amp; brackets</a></td>
+<td>E07, F54</td>
+<td><span class="badge b-target">Target</span></td>
+</tr>
+<tr>
+<td class="nw">F49</td>
+<td><a href="E12-growth.html#f49">Sandbagging detection</a></td>
+<td>E07, F33</td>
+<td><span class="badge b-target">Target</span></td>
+</tr>
+<tr>
+<td class="nw">F50</td>
+<td><a href="E12-growth.html#f50">Multi-league &amp; LO roles</a></td>
+<td class="nw">F6</td>
+<td><span class="badge b-target">Target</span></td>
+</tr>
+<tr>
+<td class="nw">F51</td>
+<td><a href="E12-growth.html#f51">Sponsor placements</a></td>
+<td class="nw">F35</td>
+<td><span class="badge b-target">Target</span></td>
+</tr>
+<tr>
+<td class="nw">F52</td>
+<td><a href="E12-growth.html#f52">10-Ball &amp; 3-Cushion Carom</a></td>
+<td>F32, E07</td>
+<td><span class="badge b-target">Target</span></td>
+</tr>
+<tr>
+<td class="nw">F53</td>
+<td><a href="E12-growth.html#f53">Venue dashboard</a></td>
+<td>F50, F36</td>
+<td><span class="badge b-target">Target</span></td>
+</tr>
+<tr>
+<td class="nw">F54</td>
+<td><a href="E12-growth.html#f54">Championship qualification tracking</a></td>
+<td>F35, F34</td>
+<td><span class="badge b-target">Target</span></td>
+</tr>
+</tbody></table></div>
+<h2 id="phase-3-deep-dive"><span class="secnum">25.2</span> Phase 3 deep dive</h2>
+<h3 id="how-phase-3-builds-on-earlier-phases"><span class="secnum">25.2.1</span> How Phase 3 builds on earlier phases</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E12-growth-1.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E12-growth-1.svg" alt="Diagram: 25 - Growth" loading="lazy" data-diagram-file="features_E12-growth-1.svg" width="781" height="908"></a><figcaption><span>Suggested order: F50 first (it changes tenancy for everything else), then F54 → F48, then the rest as the business asks.</span><a class="full" href="../assets/diagrams/features_E12-growth-1.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="cross-cutting-changes"><span class="secnum">25.2.2</span> Cross-cutting changes</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Change</th>
+<th>Why</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>league_id</code> on every top-level table + row-level filter in every query</td>
+<td>Multi-league (F50)</td>
+</tr>
+<tr>
+<td>Formats become data: <code>formats (code, scoring_kind, sl_range, rules jsonb)</code></td>
+<td>New games (F52) without schema changes</td>
+</tr>
+<tr>
+<td><code>tournaments</code>, <code>brackets</code>, <code>bracket_slots</code></td>
+<td class="nw">F48</td>
+</tr>
+<tr>
+<td><code>anomaly_flags</code> review queue</td>
+<td class="nw">F49</td>
+</tr>
+<tr>
+<td><code>placements</code> + impression counters</td>
+<td class="nw">F51</td>
+</tr>
+</tbody></table></div>
+
+<h2 id="f47"><span class="secnum">25.3</span> F47 — Master division</h2>
+<section class="feature"><div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>Status</th>
+<th>Rules</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>3</td>
+<td><span class="badge b-target">Target</span> outline</td>
+<td><a href="../04-domain-rules.html">04 §2</a> · <a href="../14-open-questions.html">Q5</a></td>
+</tr>
+</tbody></table></div>
+<h3 id="f47-requirements"><span class="secnum">25.3.1</span> Requirements</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Requirement</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">FR-47.1</td>
+<td>A division format &quot;Master&quot; that mixes 8-Ball and 9-Ball in one team night (for example, matches 1, 3, 5 in 8-Ball and 2, 4 in 9-Ball, set by bylaw)</td>
+</tr>
+<tr>
+<td class="nw">FR-47.2</td>
+<td>Each slot uses the player&#39;s SL <strong>for that slot&#39;s format</strong>; the team cap applies per format or as a combined index (to be decided)</td>
+</tr>
+<tr>
+<td class="nw">FR-47.3</td>
+<td>Team points are normalised so both formats weigh the same (for example, 8-Ball points × 20/3) or are kept separate in standings</td>
+</tr>
+<tr>
+<td class="nw">FR-47.4</td>
+<td>Accolades (including DOUBLE_STRIKE) count across formats in the same night</td>
+</tr>
+</tbody></table></div>
+<h3 id="f47-key-rules-and-assumptions"><span class="secnum">25.3.2</span> Key rules and assumptions</h3>
+<ul>
+<li>Builds directly on per-format SL (F32). No new scoring engine, only a slot → format map.</li>
+<li>The put-up cap check must run with the format of the slot being filled.</li>
+</ul>
+<h3 id="f47-diagram"><span class="secnum">25.3.3</span> Diagram</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E12-growth-f47-1.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E12-growth-f47-1.svg" alt="Diagram: 25 - Growth" loading="lazy" data-diagram-file="features_E12-growth-f47-1.svg" width="685" height="471"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_E12-growth-f47-1.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="f47-open-questions"><span class="secnum">25.3.4</span> Open questions</h3>
+<ul>
+<li>Slot-to-format pattern, cap rule, and normalisation: all need the league&#39;s bylaw.</li>
+</ul>
+</section>
+
+<h2 id="f48"><span class="secnum">25.4</span> F48 — Tournaments &amp; brackets</h2>
+<section class="feature"><div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>Status</th>
+<th>Rules</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>3</td>
+<td><span class="badge b-target">Target</span> outline</td>
+<td><a href="../04-domain-rules.html">04 §12 championship SL</a></td>
+</tr>
+</tbody></table></div>
+<h3 id="f48-requirements"><span class="secnum">25.4.1</span> Requirements</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Requirement</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">FR-48.1</td>
+<td>Admins create a tournament: format, singles or teams, bracket type (single elimination, double elimination, round robin + knockout), entry fee, dates, venue(s)</td>
+</tr>
+<tr>
+<td class="nw">FR-48.2</td>
+<td>Entry is open to qualified players or teams (F54) or to everyone, with payment through F36</td>
+</tr>
+<tr>
+<td class="nw">FR-48.3</td>
+<td>Seeding by standings or random; byes for non-power-of-two fields</td>
+</tr>
+<tr>
+<td class="nw">FR-48.4</td>
+<td>Each bracket match is an individual match scored with the live engine (E07); the winner advances automatically</td>
+</tr>
+<tr>
+<td class="nw">FR-48.5</td>
+<td>Public bracket page with live scores (F30) and a shareable link</td>
+</tr>
+<tr>
+<td class="nw">FR-48.6</td>
+<td>Handicap uses the player&#39;s <strong>championship SL</strong> (lowest attainable SL over recent sessions) where the rules say so</td>
+</tr>
+</tbody></table></div>
+<h3 id="f48-key-rules-and-assumptions"><span class="secnum">25.4.2</span> Key rules and assumptions</h3>
+<ul>
+<li>Reuse <code>individual_matches</code> and the event log; a tournament match has no <code>team_match_id</code> but a <code>bracket_slot_id</code>.</li>
+<li>Double elimination needs a losers&#39; bracket and a possible reset final.</li>
+</ul>
+<h3 id="f48-diagram"><span class="secnum">25.4.3</span> Diagram</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E12-growth-f48-1.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E12-growth-f48-1.svg" alt="Diagram: 25 - Growth" loading="lazy" data-diagram-file="features_E12-growth-f48-1.svg" width="1619" height="224"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_E12-growth-f48-1.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="f48-open-questions"><span class="secnum">25.4.4</span> Open questions</h3>
+<ul>
+<li>Which tournament formats does the league run today? Who seeds?</li>
+</ul>
+</section>
+
+<h2 id="f49"><span class="secnum">25.5</span> F49 — Sandbagging detection</h2>
+<section class="feature"><div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>Status</th>
+<th>Rules</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>3</td>
+<td><span class="badge b-target">Target</span> outline</td>
+<td>R-124 · <a href="../04-domain-rules.html">04 §10</a></td>
+</tr>
+</tbody></table></div>
+<h3 id="f49-requirements"><span class="secnum">25.5.1</span> Requirements</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Requirement</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">FR-49.1</td>
+<td>A nightly job computes anomaly signals per player: sudden PPI drop, DS ratio outliers, high variance in innings per win, much better results in playoffs than in the regular season</td>
+</tr>
+<tr>
+<td class="nw">FR-49.2</td>
+<td>Signals above thresholds create <code>anomaly_flags</code> with the evidence (charts, match links) in an admin review queue</td>
+</tr>
+<tr>
+<td class="nw">FR-49.3</td>
+<td>Admin actions: dismiss (with reason), watch, raise SL (via F18 / F33), or refer to the league committee</td>
+</tr>
+<tr>
+<td class="nw">FR-49.4</td>
+<td>Flags are never visible to players; decisions are audited</td>
+</tr>
+</tbody></table></div>
+<h3 id="f49-key-rules-and-assumptions"><span class="secnum">25.5.2</span> Key rules and assumptions</h3>
+<ul>
+<li>Needs rich event data (innings, DS per turn) from E07; nights entered as final scores only are excluded.</li>
+<li>Start with simple z-scores against the player&#39;s own history and the division; no ML until there&#39;s labelled data.</li>
+</ul>
+<h3 id="f49-diagram"><span class="secnum">25.5.3</span> Diagram</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E12-growth-f49-1.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E12-growth-f49-1.svg" alt="Diagram: 25 - Growth" loading="lazy" data-diagram-file="features_E12-growth-f49-1.svg" width="1425" height="229"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_E12-growth-f49-1.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="f49-open-questions"><span class="secnum">25.5.4</span> Open questions</h3>
+<ul>
+<li>Which signals does the league trust, and who reviews the flags?</li>
+</ul>
+</section>
+
+<h2 id="f50"><span class="secnum">25.6</span> F50 — Multi-league &amp; LO roles</h2>
+<section class="feature"><div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>Status</th>
+<th>Rules</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>3</td>
+<td><span class="badge b-target">Target</span> outline</td>
+<td><a href="../04-domain-rules.html">04 §1</a> · <a href="../11-security-and-roles.html">11 RBAC</a></td>
+</tr>
+</tbody></table></div>
+<h3 id="f50-requirements"><span class="secnum">25.6.1</span> Requirements</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Requirement</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">FR-50.1</td>
+<td>A <code>leagues</code> tenant: name, region, bylaws (<code>jsonb</code>), fee schedule, branding</td>
+</tr>
+<tr>
+<td class="nw">FR-50.2</td>
+<td>Roles become scoped: <strong>Platform admin</strong> (all leagues), <strong>League Operator</strong> (one league), Captain (team), Player</td>
+</tr>
+<tr>
+<td class="nw">FR-50.3</td>
+<td>Every query is filtered by <code>league_id</code>; Postgres row-level security as a second guard</td>
+</tr>
+<tr>
+<td class="nw">FR-50.4</td>
+<td>A player can belong to several leagues with one account and one member ID</td>
+</tr>
+<tr>
+<td class="nw">FR-50.5</td>
+<td>League switcher in the header; the URL carries the league slug (<code>/l/hcm/...</code>)</td>
+</tr>
+<tr>
+<td class="nw">FR-50.6</td>
+<td>Platform admins can create a league and invite its LO</td>
+</tr>
+</tbody></table></div>
+<h3 id="f50-key-rules-and-assumptions"><span class="secnum">25.6.2</span> Key rules and assumptions</h3>
+<ul>
+<li>Phase 1 has a single implicit league. Migration: create one <code>leagues</code> row and backfill <code>league_id</code>.</li>
+<li>Member IDs stay global (R-132); team IDs are already region-coded (R-131).</li>
+</ul>
+<h3 id="f50-diagram"><span class="secnum">25.6.3</span> Diagram</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E12-growth-f50-1.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E12-growth-f50-1.svg" alt="Diagram: 25 - Growth" loading="lazy" data-diagram-file="features_E12-growth-f50-1.svg" width="381" height="655"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_E12-growth-f50-1.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="f50-open-questions"><span class="secnum">25.6.4</span> Open questions</h3>
+<ul>
+<li>Shared or separate player SLs across leagues? Billing per league?</li>
+</ul>
+</section>
+
+<h2 id="f51"><span class="secnum">25.7</span> F51 — Sponsor placements</h2>
+<section class="feature"><div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>Status</th>
+<th>Rules</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>3</td>
+<td><span class="badge b-target">Target</span> outline</td>
+<td>—</td>
+</tr>
+</tbody></table></div>
+<h3 id="f51-requirements"><span class="secnum">25.7.1</span> Requirements</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Requirement</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">FR-51.1</td>
+<td>Admins define placements: slot (standings header, night breakdown footer, tournament page), sponsor, image, link, start and end dates, target (league, division, venue)</td>
+</tr>
+<tr>
+<td class="nw">FR-51.2</td>
+<td>Placements render only on public and read-only screens, never on the scoring or put-up screens</td>
+</tr>
+<tr>
+<td class="nw">FR-51.3</td>
+<td>Impressions and clicks are counted server-side without personal data; monthly report per sponsor</td>
+</tr>
+<tr>
+<td class="nw">FR-51.4</td>
+<td>Images are uploaded to Cloud Storage and served through the CDN; size and format limits</td>
+</tr>
+</tbody></table></div>
+<h3 id="f51-key-rules-and-assumptions"><span class="secnum">25.7.2</span> Key rules and assumptions</h3>
+<ul>
+<li>No third-party ad scripts (privacy, performance, CSP).</li>
+<li>Counting uses a 1×1 beacon or a redirect endpoint <code>/s/{placementId}</code>.</li>
+</ul>
+<h3 id="f51-diagram"><span class="secnum">25.7.3</span> Diagram</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E12-growth-f51-1.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E12-growth-f51-1.svg" alt="Diagram: 25 - Growth" loading="lazy" data-diagram-file="features_E12-growth-f51-1.svg" width="776" height="353"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_E12-growth-f51-1.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="f51-open-questions"><span class="secnum">25.7.4</span> Open questions</h3>
+<ul>
+<li>Which sponsors and slots are in scope? Is revenue shared with venues?</li>
+</ul>
+</section>
+
+<h2 id="f52"><span class="secnum">25.8</span> F52 — 10-Ball &amp; 3-Cushion Carom</h2>
+<section class="feature"><div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>Status</th>
+<th>Rules</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>3</td>
+<td><span class="badge b-target">Target</span> outline</td>
+<td><a href="../04-domain-rules.html">04 §2</a></td>
+</tr>
+</tbody></table></div>
+<h3 id="f52-requirements"><span class="secnum">25.8.1</span> Requirements</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Requirement</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">FR-52.1</td>
+<td><strong>10-Ball:</strong> a call-shot game played as a race (like 8-Ball). Rack outcomes include legal 10, 10 on a foul (re-spot), break-and-run. Its own race chart and SL range</td>
+</tr>
+<tr>
+<td class="nw">FR-52.2</td>
+<td><strong>3-Cushion Carom</strong> (popular in Vietnam): points per carom, match to a target per handicap, innings limit; the average (points ÷ innings) is the skill metric</td>
+</tr>
+<tr>
+<td class="nw">FR-52.3</td>
+<td>Formats are data: each format declares its scoring kind (<code>race</code>, <code>points_target</code>, <code>carom</code>), event types and reducer</td>
+</tr>
+<tr>
+<td class="nw">FR-52.4</td>
+<td>The live engine (E07) loads the reducer by format; the TS and Go reducers share fixtures as for 8- and 9-Ball</td>
+</tr>
+</tbody></table></div>
+<h3 id="f52-key-rules-and-assumptions"><span class="secnum">25.8.2</span> Key rules and assumptions</h3>
+<ul>
+<li>Carom doesn&#39;t fit the pool &quot;rack&quot; model: a match is a sequence of innings with points, so it gets its own reducer and UI.</li>
+<li>Handicap tables must come from the league.</li>
+</ul>
+<h3 id="f52-diagram"><span class="secnum">25.8.3</span> Diagram</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E12-growth-f52-1.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E12-growth-f52-1.svg" alt="Diagram: 25 - Growth" loading="lazy" data-diagram-file="features_E12-growth-f52-1.svg" width="729" height="332"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_E12-growth-f52-1.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="f52-open-questions"><span class="secnum">25.8.4</span> Open questions</h3>
+<ul>
+<li>Is Carom in scope for this league, or a separate product? Which 10-Ball race chart?</li>
+</ul>
+</section>
+
+<h2 id="f53"><span class="secnum">25.9</span> F53 — Venue dashboard</h2>
+<section class="feature"><div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>Status</th>
+<th>Rules</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>3</td>
+<td><span class="badge b-target">Target</span> outline</td>
+<td>R-131 venue codes</td>
+</tr>
+</tbody></table></div>
+<h3 id="f53-requirements"><span class="secnum">25.9.1</span> Requirements</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Requirement</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">FR-53.1</td>
+<td>A <strong>Venue owner</strong> role scoped to one or more venues</td>
+</tr>
+<tr>
+<td class="nw">FR-53.2</td>
+<td>Dashboard: tonight&#39;s fixtures at the venue with live status, tables in use, upcoming weeks, teams hosted</td>
+</tr>
+<tr>
+<td class="nw">FR-53.3</td>
+<td>Numbers per month: nights hosted, players, table hours (estimated from match times), fees collected for the venue&#39;s share (F36)</td>
+</tr>
+<tr>
+<td class="nw">FR-53.4</td>
+<td>Venue profile: address, map link, tables, opening hours, photos; shown on fixture cards and public pages</td>
+</tr>
+<tr>
+<td class="nw">FR-53.5</td>
+<td>Export to CSV</td>
+</tr>
+</tbody></table></div>
+<h3 id="f53-key-rules-and-assumptions"><span class="secnum">25.9.2</span> Key rules and assumptions</h3>
+<ul>
+<li>Read-only over league data; no editing of results.</li>
+<li>Table-hour estimates need start and end times from the event log (E07).</li>
+</ul>
+<h3 id="f53-diagram"><span class="secnum">25.9.3</span> Diagram</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E12-growth-f53-1.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E12-growth-f53-1.svg" alt="Diagram: 25 - Growth" loading="lazy" data-diagram-file="features_E12-growth-f53-1.svg" width="836" height="338"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_E12-growth-f53-1.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="f53-open-questions"><span class="secnum">25.9.4</span> Open questions</h3>
+<ul>
+<li>Do venues get a revenue share, and should they see player-level data?</li>
+</ul>
+</section>
+
+<h2 id="f54"><span class="secnum">25.10</span> F54 — Championship qualification tracking</h2>
+<section class="feature"><div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>Status</th>
+<th>Rules</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>3</td>
+<td><span class="badge b-target">Target</span> outline</td>
+<td><a href="../04-domain-rules.html">04 §12 championship lowest attainable SL</a></td>
+</tr>
+</tbody></table></div>
+<h3 id="f54-requirements"><span class="secnum">25.10.1</span> Requirements</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Requirement</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">FR-54.1</td>
+<td>Admins define qualification rules per championship: for example, the top 2 teams per division, a minimum number of matches played per player (e.g. ≥ 6 in the session), paid membership, and an SL rule</td>
+</tr>
+<tr>
+<td class="nw">FR-54.2</td>
+<td>The system shows each team&#39;s and player&#39;s qualification status live during the session: Qualified · On track · At risk · Not eligible, with the reason</td>
+</tr>
+<tr>
+<td class="nw">FR-54.3</td>
+<td><strong>Championship lowest attainable SL</strong>: the lowest SL a player has held over the last N sessions is used for tournament handicap</td>
+</tr>
+<tr>
+<td class="nw">FR-54.4</td>
+<td>At the end of the session, the qualified list is frozen and feeds tournament registration (F48)</td>
+</tr>
+</tbody></table></div>
+<h3 id="f54-key-rules-and-assumptions"><span class="secnum">25.10.2</span> Key rules and assumptions</h3>
+<ul>
+<li>Uses standings (F35), per-player MP (F34) and SL history (F18).</li>
+<li>Rules are data (<code>qualification_rules jsonb</code>) so they can change per championship.</li>
+</ul>
+<h3 id="f54-diagram"><span class="secnum">25.10.3</span> Diagram</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E12-growth-f54-1.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E12-growth-f54-1.svg" alt="Diagram: 25 - Growth" loading="lazy" data-diagram-file="features_E12-growth-f54-1.svg" width="565" height="984"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_E12-growth-f54-1.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="f54-open-questions"><span class="secnum">25.10.4</span> Open questions</h3>
+<ul>
+<li>The exact qualification rules for the national or city championship.</li>
+</ul>
+</section>
+
+</article>
+</main>
+<script src="../assets/site-data.js"></script>
+<script src="../assets/layout.js"></script>
+<script src="../assets/search-index.js"></script>
+<script src="../assets/site.js"></script>
+</body>
+</html>

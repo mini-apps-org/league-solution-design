@@ -1,0 +1,378 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>08 - Scorekeeping Engine · MViP Solution Design</title>
+<link rel="stylesheet" href="assets/site.css">
+<script src="assets/boot.js"></script>
+</head>
+<body data-root="" data-page="08-scorekeeping-engine.html">
+<main id="main" class="content">
+<article class="doc">
+<h1>08 - Scorekeeping Engine</h1>
+
+<h2 id="0-phase-1-mvp-result-entry"><span class="secnum">8.0</span> Phase 1 (MVP): result entry</h2>
+<p>The MVP does <strong>not</strong> score shot by shot. The captain enters each individual match&#39;s final numbers, and Postgres does the rest (<span class="badge b-planned">Planned</span><code>00002_business_rules.sql</code>, see <a href="06-data-model.html#b--planned-00002_business_rulessql-per-plan-2-must-be-restored">06 §B</a>).</p>
+<figure class="diagram"><a class="diagram-img" href="assets/diagrams/08-scorekeeping-engine-1.svg" target="_blank" aria-label="Open diagram full screen"><img src="assets/diagrams/08-scorekeeping-engine-1.svg" alt="Diagram: 08 - Scorekeeping Engine" loading="lazy" data-diagram-file="08-scorekeeping-engine-1.svg" width="1523" height="912"></a><figcaption><span></span><a class="full" href="assets/diagrams/08-scorekeeping-engine-1.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Concern</th>
+<th>MVP behavior</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Concurrency</td>
+<td>Two captains can act at once; the server re-checks <code>can_put_up()</code> on every put-up. Results are last-write-wins per row (admins can correct after submit)</td>
+</tr>
+<tr>
+<td>Validation</td>
+<td>Games above a race, or both players at their race, raise in the trigger → <code>400 40001</code></td>
+</tr>
+<tr>
+<td>Undo</td>
+<td>Re-submit the result with corrected numbers before the night is submitted</td>
+</tr>
+<tr>
+<td>Offline</td>
+<td>None. The PWA caches only static assets</td>
+</tr>
+<tr>
+<td>Audit</td>
+<td><code>individual_matches.entered_by</code>, <code>team_matches.submitted_by</code></td>
+</tr>
+</tbody></table></div>
+<p>Everything below this point is the <strong><span class="badge b-target">Target</span> Phase 2 target</strong>: live tap-by-tap scoring. When it is built, it must either call the same Postgres scoring functions at rack end, or move the rules into a Go engine shared with TS (revisit ADR-004). Either way the cookie/CSRF/envelope conventions in <a href="07-api-design.html#1-conventions-as-built">07 §1</a> apply.</p>
+<hr>
+<p>Live scoring is the most critical and most complex part of the system. It runs on a phone in a noisy billiard club, often on poor Wi-Fi, for about 3 hours per night across many venues at once.</p>
+<h2 id="1-design-principles"><span class="secnum">8.1</span> Design principles</h2>
+<ol>
+<li><strong>Event-sourced.</strong> Every tap is an immutable event in <code>match_events</code>. All scores, innings, DS and points are <strong>projections</strong> of the event log. This gives an audit trail, undo, dispute evidence and SL recalculation from raw data.</li>
+<li><strong>Deterministic pure reducer.</strong> <code>state&#39; = reduce(state, event)</code> runs on the server (authoritative) and is mirrored in TypeScript in <code>league-fe/src/lib</code> for optimistic UI and offline use. Both are tested against the <strong>same JSON fixtures</strong>. Whether the server side is a new Go package or stays in the Postgres scoring functions (called at rack end) is the Phase 2 ADR-004 revisit.</li>
+<li><strong>Server authoritative.</strong> The client applies events optimistically. The server validates, assigns <code>seq</code> and broadcasts. On conflict the client rebases.</li>
+<li><strong>Offline-tolerant.</strong> Events are queued in IndexedDB with client-generated <code>idempotency_key</code>s and replayed when the connection returns.</li>
+<li><strong>Single active scoring device per individual match</strong> (lease), with read-only live viewers.</li>
+</ol>
+<h2 id="2-team-match-lifecycle"><span class="secnum">8.2</span> Team match lifecycle</h2>
+<figure class="diagram"><a class="diagram-img" href="assets/diagrams/08-scorekeeping-engine-2.svg" target="_blank" aria-label="Open diagram full screen"><img src="assets/diagrams/08-scorekeeping-engine-2.svg" alt="Diagram: 08 - Scorekeeping Engine" loading="lazy" data-diagram-file="08-scorekeeping-engine-2.svg" width="1018" height="1324"></a><figcaption><span></span><a class="full" href="assets/diagrams/08-scorekeeping-engine-2.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h2 id="3-event-catalogue"><span class="secnum">8.3</span> Event catalogue</h2>
+<p>All events share <code>{idempotencyKey, teamMatchId, expectedSeq, clientTs, deviceId, type, payload}</code>.</p>
+<h3 id="31-team-level-events"><span class="secnum">8.3.1</span> Team-level events</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Type</th>
+<th>Payload</th>
+<th>Validations</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>START_TEAM_MATCH</code></td>
+<td><code>{scorekeeperName}</code></td>
+<td>Status SCHEDULED; actor is a captain of either team or LO; within the start window <span class="badge b-assumption">Assumption</span> (±2 h of scheduled)</td>
+</tr>
+<tr>
+<td><code>ROSTER_ADD_PLAYER</code></td>
+<td><code>{teamId, playerId}</code></td>
+<td>Before match 1 starts; player is a paid member (R-014), eligible in the division (R-011/R-012); captain of that team. Brand-new players are created via the admin API (R-018)</td>
+</tr>
+<tr>
+<td><code>COIN_FLIP_RECORDED</code></td>
+<td><code>{winnerTeamId, choice}</code></td>
+<td>Once</td>
+</tr>
+<tr>
+<td><code>PUT_UP_PLAYER</code></td>
+<td><code>{order, teamId, playerId}</code></td>
+<td>Correct team per R-030/R-031; player not used yet; cap feasibility (R-035)</td>
+</tr>
+<tr>
+<td><code>RESPOND_PLAYER</code></td>
+<td><code>{order, teamId, playerId}</code></td>
+<td>Same checks for the other team</td>
+</tr>
+<tr>
+<td><code>FORFEIT_SLOT</code></td>
+<td><code>{order, forfeitingTeamId}</code></td>
+<td>No eligible player</td>
+</tr>
+<tr>
+<td><code>SUBMIT_TEAM_MATCH</code></td>
+<td><code>{}</code></td>
+<td>All 5 slots COMPLETED/FORFEIT</td>
+</tr>
+<tr>
+<td><code>VERIFY</code></td>
+<td><code>{teamId, decision, snapshotHash, comment}</code></td>
+<td>Captain of teamId; hash equals the server hash for CONFIRM</td>
+</tr>
+<tr>
+<td><code>LO_RESOLVE</code></td>
+<td><code>{resolution, corrections[], grantBonus}</code></td>
+<td>LO only; corrections produce <code>ADMIN_CORRECTION</code> events</td>
+</tr>
+</tbody></table></div>
+<h3 id="32-individual-match--rack-events"><span class="secnum">8.3.2</span> Individual match / rack events</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Type</th>
+<th>Payload</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>LAG_RECORDED</code></td>
+<td><code>{winnerPlayerId, breakerPlayerId}</code></td>
+<td>Lag winner chooses the breaker. Sets <code>activePlayer = breaker</code>. Rack 1 opens</td>
+</tr>
+<tr>
+<td><code>TURN_OVER</code></td>
+<td><code>{playerId}</code></td>
+<td>Must be the active player. Switches the active player. If <code>playerId == secondShooter</code> → <code>innings++</code> (R-100)</td>
+</tr>
+<tr>
+<td><code>DEFENSIVE_SHOT</code></td>
+<td><code>{playerId}</code></td>
+<td><code>ds[player]++</code> and then the same effect as <code>TURN_OVER</code> (R-102)</td>
+</tr>
+<tr>
+<td><code>TIMEOUT</code></td>
+<td><code>{playerId}</code></td>
+<td><code>timeoutsLeft[player] &gt; 0</code>; decrement (resets per rack)</td>
+</tr>
+<tr>
+<td><code>BALL_POCKETED</code> (9B)</td>
+<td><code>{ball:1..9, playerId}</code></td>
+<td>Ball not yet accounted for in this rack; points += 1 (or 2 for the 9); if <code>ball==9</code> → rack ends</td>
+</tr>
+<tr>
+<td><code>DEAD_BALL</code> (9B)</td>
+<td><code>{ball:1..8}</code></td>
+<td>Not the 9 (R-082); deadBalls++</td>
+</tr>
+<tr>
+<td><code>RACK_END</code> (8B)</td>
+<td><code>{outcome, shooterPlayerId}</code></td>
+<td>BR/8OB only if <code>firstTurnLive</code> (R-060). Winner = shooter for win codes, opponent for loss codes</td>
+</tr>
+<tr>
+<td><code>UNDO</code></td>
+<td><code>{revertsSeq}</code></td>
+<td>Only the <strong>last</strong> non-undone event of the individual match. The projection is re-reduced</td>
+</tr>
+<tr>
+<td><code>SWITCH_ACTIVE_PLAYER</code></td>
+<td><code>{playerId}</code></td>
+<td>Correction from the overflow menu (⋮)</td>
+</tr>
+<tr>
+<td><code>ADMIN_CORRECTION</code></td>
+<td><code>{path, from, to, reason}</code></td>
+<td>LO only, post-match, audited</td>
+</tr>
+</tbody></table></div>
+<h2 id="4-reducer-state-per-individual-match"><span class="secnum">8.4</span> Reducer state (per individual match)</h2>
+<div class="code"><span class="code-lang">ts</span><button class="copy" type="button">Copy</button><pre><code class="lang-ts">type LiveMatchState = {
+  format: 'EIGHT_BALL' | 'NINE_BALL';
+  order: 1|2|3|4|5;
+  players: { home: PlayerRef; away: PlayerRef };       // with SL snapshot
+  needed: { home: number; away: number };              // race games or target points
+  won:    { home: number; away: number };              // games or points (capped)
+  lagWinner: Side; breaker: Side;
+  secondShooter: Side;                                 // innings counter side
+  activePlayer: Side;
+  innings: number;                                     // match total
+  rack: {
+    no: number; breaker: Side; innings: number;
+    firstTurnLive: boolean;                            // R-060
+    ds: { home: number; away: number };
+    timeoutsLeft: { home: number; away: number };
+    balls?: Record&lt;1|2|3|4|5|6|7|8|9, Side | 'dead' | null&gt;; // 9B
+    points?: { home: number; away: number };           // 9B
+  };
+  ds: { home: number; away: number };                  // match totals
+  status: 'LAG' | 'IN_PROGRESS' | 'COMPLETED';
+  result?: { winner: Side; ptsEarned: { home: number; away: number } };
+  accolades: Accolade[];
+};</code></pre></div>
+<h3 id="41-8-ball-reduction-pseudo"><span class="secnum">8.4.1</span> 8-Ball reduction (pseudo)</h3>
+<div class="code"><span class="code-lang">text</span><button class="copy" type="button">Copy</button><pre><code class="lang-text">on RACK_END(outcome, shooter):
+  assert status == IN_PROGRESS
+  if outcome in {BREAK_AND_RUN, EIGHT_ON_BREAK}: assert rack.firstTurnLive &amp;&amp; shooter == rack.breaker
+  winner = outcome in WIN_CODES ? shooter : other(shooter)
+  won[winner] += 1
+  record accolade(BR | 8OB) for shooter if applicable
+  if won[winner] == needed[winner]:
+      status = COMPLETED
+      loser = other(winner)
+      pts = points8(won[loser], needed[loser])            # 04 §5.3
+      if won[loser] == 0 and lagWinner == winner: accolade RACKLESS
+      check DOUBLE_STRIKE for each player on the team-match night
+  else:
+      open next rack: breaker = (break_rule == WINNER ? winner : alternate)
+      rack.firstTurnLive = true; timeouts reset by SL
+
+on TURN_OVER(p):
+  assert p == activePlayer
+  rack.firstTurnLive = false
+  if p == secondShooter: innings += 1; rack.innings += 1
+  activePlayer = other(p)</code></pre></div>
+<h3 id="42-9-ball-reduction-pseudo"><span class="secnum">8.4.2</span> 9-Ball reduction (pseudo)</h3>
+<div class="code"><span class="code-lang">text</span><button class="copy" type="button">Copy</button><pre><code class="lang-text">on BALL_POCKETED(ball, p):
+  assert rack.balls[ball] == null and p == activePlayer
+  rack.balls[ball] = p
+  pts = (ball == 9) ? 2 : 1
+  won[p] = min(needed[p], won[p] + pts)                 # R-083 cap
+  if won[p] == needed[p]: complete match
+      loserPts = lookup20(loserSL, won[loser]); winnerPts = 20 - loserPts
+  elif ball == 9:
+      remaining unaccounted balls → prompt &quot;mark as dead?&quot; → DEAD_BALL events
+      if breaker legal-break &amp; firstTurnLive &amp; ball==9 on break → accolade 9OB
+      open next rack (breaker per rule)
+
+on DEAD_BALL(ball): assert ball != 9; rack.balls[ball] = 'dead'</code></pre></div>
+<p><strong>Innings detail (both formats).</strong> The inning counter belongs to the match. It increments only on the second shooter&#39;s turn ends (<code>TURN_OVER</code> or <code>DEFENSIVE_SHOT</code>). A rack that ends during the first shooter&#39;s turn does <strong>not</strong> increment the inning. This matches the APA paper rule &quot;An inning is not over … until the player who lost the initial lag misses or otherwise completes his/her turn.&quot;</p>
+<h2 id="5-concurrency-ordering-and-offline"><span class="secnum">8.5</span> Concurrency, ordering, and offline</h2>
+<figure class="diagram"><a class="diagram-img" href="assets/diagrams/08-scorekeeping-engine-3.svg" target="_blank" aria-label="Open diagram full screen"><img src="assets/diagrams/08-scorekeeping-engine-3.svg" alt="Diagram: 08 - Scorekeeping Engine" loading="lazy" data-diagram-file="08-scorekeeping-engine-3.svg" width="1813" height="845"></a><figcaption><span></span><a class="full" href="assets/diagrams/08-scorekeeping-engine-3.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<ul>
+<li><strong>Idempotency:</strong> a duplicate <code>idempotency_key</code> returns the original result (HTTP 200, same seq).</li>
+<li><strong>Scoring lease:</strong> only the device holding <code>lease:individual:{id}</code> can write rack events. Another captain or LO can <strong>take over</strong> explicitly (audited). This handles a phone dying mid-match.</li>
+<li><strong>Batching:</strong> the client sends up to 50 queued events per request, in order. The server processes them sequentially in one transaction, so partial failure stops at the first invalid event.</li>
+<li><strong>Clock:</strong> ordering is by server <code>seq</code>. <code>client_ts</code> is used only for display and shot-timer analytics.</li>
+</ul>
+<h2 id="6-verification-snapshot"><span class="secnum">8.6</span> Verification snapshot</h2>
+<p>On <code>SUBMIT_TEAM_MATCH</code>, the server builds a canonical JSON:</p>
+<div class="code"><span class="code-lang">json</span><button class="copy" type="button">Copy</button><pre><code class="lang-json">{
+  &quot;teamMatchId&quot;: &quot;&lt;team-match-uuid&gt;&quot;,
+  &quot;matches&quot;: [
+    {
+      &quot;order&quot;: 1,
+      &quot;home&quot;: {
+        &quot;memberNo&quot;: &quot;26110042&quot;,
+        &quot;sl&quot;: 5,
+        &quot;won&quot;: 4,
+        &quot;needed&quot;: 4,
+        &quot;pts&quot;: 2,
+        &quot;innings&quot;: 17,
+        &quot;ds&quot;: 1
+      },
+      &quot;away&quot;: {
+        &quot;memberNo&quot;: &quot;26100007&quot;,
+        &quot;sl&quot;: 3,
+        &quot;won&quot;: 1,
+        &quot;needed&quot;: 2,
+        &quot;pts&quot;: 1,
+        &quot;innings&quot;: 17,
+        &quot;ds&quot;: 0
+      }
+    }
+  ],
+  &quot;totals&quot;: {
+    &quot;home&quot;: 9,
+    &quot;away&quot;: 5
+  }
+}</code></pre></div>
+<p>A real snapshot has 5 items in <code>matches</code> (orders 1–5). Only order 1 is shown here. Keys are sorted and whitespace is removed before hashing, so formatting never changes the hash.</p>
+<p><code>snapshot_hash = sha256(canonical_json)</code>. Each captain&#39;s app shows the summary (mirrors Foundation #3/#4) and sends <code>VERIFY {decision, snapshotHash}</code>. If both CONFIRM with an equal hash → FINALIZED, bonus applied (R-110). In Phase 2 dual-device mode, each team&#39;s scorer keeps its own event stream. The server diffs the projections and produces <code>disputes.diff</code> if they differ.</p>
+<h2 id="7-post-finalization-pipeline"><span class="secnum">8.7</span> Post-finalization pipeline</h2>
+<figure class="diagram"><a class="diagram-img" href="assets/diagrams/08-scorekeeping-engine-4.svg" target="_blank" aria-label="Open diagram full screen"><img src="assets/diagrams/08-scorekeeping-engine-4.svg" alt="Diagram: 08 - Scorekeeping Engine" loading="lazy" data-diagram-file="08-scorekeeping-engine-4.svg" width="895" height="734"></a><figcaption><span></span><a class="full" href="assets/diagrams/08-scorekeeping-engine-4.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<p>The transactional <strong>outbox pattern</strong> (an <code>outbox</code> table written in the finalize transaction and polled by the worker) guarantees at-least-once processing. Consumers are idempotent.</p>
+<h2 id="8-edge-cases-checklist-each-must-have-a-test"><span class="secnum">8.8</span> Edge cases checklist (each must have a test)</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>Case</th>
+<th>Expected</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1</td>
+<td>SL2 vs SL2, loser wins 1</td>
+<td>Hill → 2-1</td>
+</tr>
+<tr>
+<td>2</td>
+<td>8OB after a turn-over in the same rack</td>
+<td>Rejected (R-060)</td>
+</tr>
+<tr>
+<td>3</td>
+<td>Early 8 by the breaker on the break</td>
+<td>LOSS for the breaker (E8), opponent +1</td>
+</tr>
+<tr>
+<td>4</td>
+<td>9-ball pocketed on a foul</td>
+<td>Not dead, re-spot; no points; rack continues</td>
+</tr>
+<tr>
+<td>5</td>
+<td>9B player at 37/38 makes the 9</td>
+<td>Recorded 38 (capped), match ends</td>
+</tr>
+<tr>
+<td>6</td>
+<td>Rack ends on the first shooter&#39;s turn</td>
+<td>Innings unchanged</td>
+</tr>
+<tr>
+<td>7</td>
+<td>Undo after a match-ending rack</td>
+<td>Match re-opens, points cleared</td>
+</tr>
+<tr>
+<td>8</td>
+<td>Lineup would exceed 23</td>
+<td>Player disabled with reason &quot;would exceed 23 SL cap&quot;</td>
+</tr>
+<tr>
+<td>9</td>
+<td>Two devices submit the same event offline</td>
+<td>Second is idempotent no-op</td>
+</tr>
+<tr>
+<td>10</td>
+<td>Two devices submit different events at the same seq</td>
+<td>Second gets 409 and rebases, or is rejected without a lease</td>
+</tr>
+<tr>
+<td>11</td>
+<td>SL changed by the LO mid-night</td>
+<td>Matches already created keep the snapshot; later slots use the new SL</td>
+</tr>
+<tr>
+<td>12</td>
+<td>Forfeit slot 5</td>
+<td>Opponent 3 pts (8B) / 20 pts (9B) <span class="badge b-assumption">Assumption</span>; no MP for either player</td>
+</tr>
+<tr>
+<td>13</td>
+<td>Verification deadline passes with one confirm</td>
+<td>FINALIZED_NO_BONUS for both teams <span class="badge b-assumption">Assumption</span></td>
+</tr>
+<tr>
+<td>14</td>
+<td>BR + 8OB by the same player on the same night</td>
+<td>DOUBLE_STRIKE accolade once per night</td>
+</tr>
+</tbody></table></div>
+
+</article>
+</main>
+<script src="assets/site-data.js"></script>
+<script src="assets/layout.js"></script>
+<script src="assets/search-index.js"></script>
+<script src="assets/site.js"></script>
+</body>
+</html>

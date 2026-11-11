@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>12 - Infrastructure and DevOps · MViP Solution Design</title>
+<link rel="stylesheet" href="assets/site.css">
+<script src="assets/boot.js"></script>
+</head>
+<body data-root="" data-page="12-infra-devops.html">
+<main id="main" class="content">
+<article class="doc">
+<h1>12 - Infrastructure and DevOps</h1>
+
+<blockquote>
+<p><span class="badge b-built">Built</span> as-built · <span class="badge b-target">Target</span> (not yet in any repo)</p>
+</blockquote>
+<h2 id="1-environments-and-hosts"><span class="secnum">12.1</span> Environments and hosts</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Env</th>
+<th>Frontend</th>
+<th>API</th>
+<th>Config</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>development</td>
+<td><code>http://localhost:5174</code> (<code>pnpm dev</code>)</td>
+<td><code>http://localhost:9200</code> (<code>make run</code> with air hot reload)</td>
+<td><code>development.yaml</code>, <code>.env</code></td>
+</tr>
+<tr>
+<td>staging</td>
+<td><span class="badge b-target">Target</span>(no separate Vercel target yet)</td>
+<td><code>https://be.mvip-league.com</code> per <code>staging.yaml</code></td>
+<td><span class="badge b-caution">Caution</span><code>staging.yaml</code> = <code>production.yaml</code> (same hosts), so staging needs its own hostnames</td>
+</tr>
+<tr>
+<td>production</td>
+<td><code>https://www.mvip-league.com</code> (Vercel)</td>
+<td><code>https://be.mvip-league.com</code></td>
+<td><code>production.yaml</code> + env vars</td>
+</tr>
+</tbody></table></div>
+<p>DNS: <strong>Cloudflare</strong> for <code>mvip-league.com</code>. <code>www</code> points to Vercel; <code>be</code> points to the GCP load balancer (<span class="badge b-target">Target</span> manifests).</p>
+<h2 id="2-frontend-pipeline--league-fegithubworkflows"><span class="secnum">12.2</span> Frontend pipeline (<span class="badge b-built">Built</span><code>league-fe/.github/workflows</code>)</h2>
+<figure class="diagram"><a class="diagram-img" href="assets/diagrams/12-infra-devops-1.svg" target="_blank" aria-label="Open diagram full screen"><img src="assets/diagrams/12-infra-devops-1.svg" alt="Diagram: 12 - Infrastructure and DevOps" loading="lazy" data-diagram-file="12-infra-devops-1.svg" width="1203" height="378"></a><figcaption><span></span><a class="full" href="assets/diagrams/12-infra-devops-1.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<ul>
+<li>Secrets: <code>VERCEL_TOKEN</code>, <code>VERCEL_ORG_ID</code>, <code>VERCEL_PROJECT_ID</code>. Vercel env: <code>VITE_API_URL</code>.</li>
+<li><code>vercel.json</code>: build <code>pnpm build</code>, output <code>dist</code>, <strong>git deployments disabled</strong>, SPA rewrite (except icons, manifest, <code>assets/</code>), security headers, <code>/assets/*</code> immutable for 1 year, <code>/sw.js</code> no-cache.</li>
+<li>Concurrency: deploys queue rather than cancel.</li>
+<li>Rollback: <code>vercel rollback</code>.</li>
+<li>Post-release checks (README): sign in, open a deep link, and confirm logout sends <code>X-CSRF-Token</code>.</li>
+</ul>
+<h2 id="3-backend-pipeline--league-begithubworkflows"><span class="secnum">12.3</span> Backend pipeline (<span class="badge b-built">Built</span><code>league-be/.github/workflows</code>)</h2>
+<figure class="diagram"><a class="diagram-img" href="assets/diagrams/12-infra-devops-2.svg" target="_blank" aria-label="Open diagram full screen"><img src="assets/diagrams/12-infra-devops-2.svg" alt="Diagram: 12 - Infrastructure and DevOps" loading="lazy" data-diagram-file="12-infra-devops-2.svg" width="1061" height="366"></a><figcaption><span></span><a class="full" href="assets/diagrams/12-infra-devops-2.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<ul>
+<li><strong>Auth to GCP:</strong> Workload Identity Federation. Pool <code>github-pool</code>, provider <code>github-provider</code> (project number 225614846438), service account <code>github-actions@vincent-mini-apps-project.iam.gserviceaccount.com</code>.</li>
+<li><strong>Image:</strong> <code>asia-southeast1-docker.pkg.dev/vincent-mini-apps-project/league-repository/league-service:&lt;tag&gt;</code>. The build arg <code>VERSION</code> is stamped into the binary and shown by <code>/health</code>.</li>
+<li><strong>Dockerfile:</strong> <code>golang:1.26-alpine</code> builder (CGO off, <code>-trimpath -s -w</code>) → <code>gcr.io/distroless/static-debian12:nonroot</code>. Exposes 9200 (<span class="badge b-assumption">Assumption</span> the staging/prod YAML listens on 5001; set <code>PORT</code> or align them).</li>
+<li><strong>Makefile:</strong> <code>run</code>, <code>api</code>, <code>swagger</code>, <code>vet</code>, <code>test</code>, <code>coverage</code>, <code>ar-login</code>, <code>image</code>, <code>image-push</code>. <span class="badge b-target">Target</span> Add <code>migrate</code> and <code>seed</code>.</li>
+</ul>
+<h2 id="4--target-runtime-on-gcp"><span class="secnum">12.4</span> <span class="badge b-target">Target</span> runtime on GCP</h2>
+<figure class="diagram"><a class="diagram-img" href="assets/diagrams/12-infra-devops-3.svg" target="_blank" aria-label="Open diagram full screen"><img src="assets/diagrams/12-infra-devops-3.svg" alt="Diagram: 12 - Infrastructure and DevOps" loading="lazy" data-diagram-file="12-infra-devops-3.svg" width="842" height="602"></a><figcaption><span></span><a class="full" href="assets/diagrams/12-infra-devops-3.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Plan</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Manifests</td>
+<td>Helm chart or Kustomize in <code>league-be/deploy/</code> with Deployment, Service, HPA, PDB, readiness probe (<code>/readyz</code> with a DB ping, <span class="badge b-target">Target</span>) and liveness probe (<code>/api/v1/health</code>)</td>
+</tr>
+<tr>
+<td>Deploy step</td>
+<td>Add a <code>deploy</code> job to <code>release.yaml</code>: <code>gcloud container clusters get-credentials</code> → migrate Job → <code>helm upgrade --atomic</code></td>
+</tr>
+<tr>
+<td>Migrations</td>
+<td>Adopt <code>golang-migrate</code> or <code>goose</code>. Rename files to the tool&#39;s format. Expand/contract releases</td>
+</tr>
+<tr>
+<td>Database</td>
+<td>Cloud SQL Postgres (version to match the dev/scratch DB, 16+), automated backups + PITR, private IP, pool max 20 per pod</td>
+</tr>
+<tr>
+<td>Secrets</td>
+<td>Secret Manager via the CSI driver; no secrets in YAML</td>
+</tr>
+<tr>
+<td>Freeze window</td>
+<td>No prod deploys on league nights (Mon–Fri 17:00–23:30 ICT)</td>
+</tr>
+<tr>
+<td>Staging</td>
+<td>Separate hostnames (e.g. <code>staging.mvip-league.com</code> / <code>be-staging.mvip-league.com</code>), a separate <code>staging.yaml</code>, and a separate Google OAuth redirect</td>
+</tr>
+<tr>
+<td>IaC</td>
+<td>Terraform for the VPC, GKE, Cloud SQL, Artifact Registry, IAM (WIF) and Cloudflare DNS</td>
+</tr>
+</tbody></table></div>
+<h2 id="5--observability"><span class="secnum">12.5</span> <span class="badge b-target">Target</span> Observability</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Concern</th>
+<th>Today</th>
+<th>Target</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Logs</td>
+<td>stdlib <code>log.Printf</code> (method, path, status, code, reason, cause)</td>
+<td><code>log/slog</code> JSON → Cloud Logging, request ID middleware</td>
+</tr>
+<tr>
+<td>Metrics</td>
+<td>—</td>
+<td>Managed Prometheus: request latency, 5xx rate, DB pool, Phase 2 scoring metrics</td>
+</tr>
+<tr>
+<td>Tracing</td>
+<td>—</td>
+<td>OpenTelemetry → Cloud Trace</td>
+</tr>
+<tr>
+<td>FE errors</td>
+<td>—</td>
+<td>Sentry or Vercel monitoring</td>
+</tr>
+<tr>
+<td>Uptime</td>
+<td>—</td>
+<td>Cloud Monitoring checks on <code>/api/v1/health</code> and <code>www.</code></td>
+</tr>
+</tbody></table></div>
+<h2 id="6-backup-and-dr-"><span class="secnum">12.6</span> Backup and DR (<span class="badge b-target">Target</span>)</h2>
+<ul>
+<li>Cloud SQL daily backups (35 days) + PITR (7 days), with a monthly restore test.</li>
+<li>RPO ≤ 5 min, RTO ≤ 1 h.</li>
+<li>Images are immutable per tag, so a rollback is redeploying the previous tag. FE rollback is <code>vercel rollback</code>.</li>
+</ul>
+<h2 id="7-indicative-monthly-cost--phase-1"><span class="secnum">12.7</span> Indicative monthly cost (<span class="badge b-target">Target</span> Phase 1)</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Size</th>
+<th>USD / month</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>GKE (Standard, 2 × e2-medium) or Autopilot</td>
+<td>small</td>
+<td>60–150</td>
+</tr>
+<tr>
+<td>Cloud SQL Postgres</td>
+<td>db-custom-1-3840, 20 GB, backups</td>
+<td>60–120 (HA ≈ ×2)</td>
+</tr>
+<tr>
+<td>LB + egress + logs</td>
+<td></td>
+<td>25–60</td>
+</tr>
+<tr>
+<td>Artifact Registry</td>
+<td>&lt; 5 GB</td>
+<td>&lt; 5</td>
+</tr>
+<tr>
+<td>Vercel</td>
+<td>Hobby/Pro</td>
+<td>0–20</td>
+</tr>
+<tr>
+<td>Cloudflare</td>
+<td>Free</td>
+<td>0</td>
+</tr>
+<tr>
+<td><strong>Total</strong></td>
+<td></td>
+<td><strong>≈ 150–350</strong></td>
+</tr>
+</tbody></table></div>
+<p>Phase 2 adds Memorystore Redis (≈ 35–70) and HA Postgres.</p>
+
+</article>
+</main>
+<script src="assets/site-data.js"></script>
+<script src="assets/layout.js"></script>
+<script src="assets/search-index.js"></script>
+<script src="assets/site.js"></script>
+</body>
+</html>

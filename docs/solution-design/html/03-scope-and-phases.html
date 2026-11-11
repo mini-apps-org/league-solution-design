@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>03 - Scope and Delivery Phases · MViP Solution Design</title>
+<link rel="stylesheet" href="assets/site.css">
+<script src="assets/boot.js"></script>
+</head>
+<body data-root="" data-page="03-scope-and-phases.html">
+<main id="main" class="content">
+<article class="doc">
+<h1>03 - Scope and Delivery Phases</h1>
+
+<blockquote>
+<p>Phase 1 follows the team&#39;s MVP plan in <code>league-fe/plans/20261104-2126-bida-league-mvp/</code>. Status values: <span class="badge b-built">Built</span> and on <code>master</code> · <span class="badge b-parked">Parked</span> built but parked (FE <code>_parked/</code>) · <span class="badge b-planned">Planned</span> specified, code missing from the repo · <span class="badge b-target">Target</span> not started.</p>
+</blockquote>
+<h2 id="1-capability-map"><span class="secnum">3.1</span> Capability map</h2>
+<figure class="diagram"><a class="diagram-img" href="assets/diagrams/03-scope-and-phases-1.svg" target="_blank" aria-label="Open diagram full screen"><img src="assets/diagrams/03-scope-and-phases-1.svg" alt="Diagram: 03 - Scope and Delivery Phases" loading="lazy" data-diagram-file="03-scope-and-phases-1.svg" width="1120" height="526"></a><figcaption><span></span><a class="full" href="assets/diagrams/03-scope-and-phases-1.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h2 id="2-phases"><span class="secnum">3.2</span> Phases</h2>
+<h3 id="phase-1-mvp-run-a-team-night-on-a-phone"><span class="secnum">3.2.1</span> Phase 1: MVP &quot;run a team night on a phone&quot;</h3>
+<p><strong>Goal:</strong> a captain runs a whole night on a phone: open tonight&#39;s fixture, put up 5 players within the 23-SL cap, enter 5 results, submit. An admin changes a skill level and sees the history.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Area</th>
+<th>Scope</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Auth</td>
+<td>Google OIDC + PKCE, cookie session, CSRF, logout, <code>/me</code></td>
+<td><span class="badge b-built">Built</span></td>
+</tr>
+<tr>
+<td>Onboarding</td>
+<td>Link a Google account to a member ID (<code>/members/preview</code>, <code>/me/link</code>)</td>
+<td><span class="badge b-built">Built</span> UI · <span class="badge b-planned">Planned</span> API</td>
+</tr>
+<tr>
+<td>Roles</td>
+<td>ADMIN / CAPTAIN / PLAYER from <code>users_roles</code>; captain-owns-night check</td>
+<td><span class="badge b-built">Built</span> tables · <span class="badge b-planned">Planned</span> enforcement</td>
+</tr>
+<tr>
+<td>Schema</td>
+<td>Seasons, divisions (cap 23), venues, players (SL 2–7, paid flag), teams, race chart, team/individual matches, stats, RBAC</td>
+<td><span class="badge b-built">Built</span><code>00001_init.sql</code></td>
+</tr>
+<tr>
+<td>Business rules</td>
+<td><code>team_rosters</code>, snapshot / score / roll-up / stats triggers, <code>can_put_up()</code>, <code>change_skill_level()</code>, views</td>
+<td><span class="badge b-planned">Planned</span><code>00002</code> (missing)</td>
+</tr>
+<tr>
+<td>League API</td>
+<td>13 endpoints + <code>/teams</code></td>
+<td><span class="badge b-planned">Planned</span><code>internal/league</code> (missing)</td>
+</tr>
+<tr>
+<td>Schedule screen</td>
+<td>Season/division select, week chips, fixture cards</td>
+<td><span class="badge b-parked">Parked</span></td>
+</tr>
+<tr>
+<td>Night screen</td>
+<td>Both rosters (SL, MW/MP, points), 5-match scoresheet, next action</td>
+<td><span class="badge b-parked">Parked</span></td>
+</tr>
+<tr>
+<td>Put-up</td>
+<td>Candidate list with <code>x/23</code> and block reasons; home puts up first on odd matches</td>
+<td><span class="badge b-parked">Parked</span></td>
+</tr>
+<tr>
+<td>Result entry</td>
+<td>Games (capped at race), innings, defensive shots; points preview</td>
+<td><span class="badge b-parked">Parked</span></td>
+</tr>
+<tr>
+<td>Submit</td>
+<td>Captain submits a complete night; admin may edit afterwards</td>
+<td><span class="badge b-parked">Parked</span></td>
+</tr>
+<tr>
+<td>Admin players</td>
+<td>Search, SL change with reason, history, transfer, add paid member</td>
+<td><span class="badge b-parked">Parked</span></td>
+</tr>
+<tr>
+<td>PWA</td>
+<td>Installable, static-asset cache, light/dark, en/vi</td>
+<td><span class="badge b-built">Built</span></td>
+</tr>
+<tr>
+<td>Delivery</td>
+<td>FE → Vercel on tag; BE image → Artifact Registry on tag</td>
+<td><span class="badge b-built">Built</span>· <span class="badge b-target">Target</span> GKE deploy</td>
+</tr>
+</tbody></table></div>
+<p><strong>Out of Phase 1</strong> (the MVP plan&#39;s own out-of-scope list): coin flip, live tap-by-tap scoring, offline sync, rack-level data, notifications, payments, 9-Ball.</p>
+<h3 id="phase-2-full-league-operations"><span class="secnum">3.2.2</span> Phase 2: full league operations</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Area</th>
+<th>Scope</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Live scoring</td>
+<td>Coin flip, lag, Screen 5 (turn over, DS, timeouts, 6 rack outcomes, undo), racks, accolades (BR, 8OB, Rackless, Double-strike), offline queue, live viewers (<a href="08-scorekeeping-engine.html">08</a>)</td>
+</tr>
+<tr>
+<td>Verification</td>
+<td>Dual-captain score matching, +1 (8B) / +10 (9B) bonus, disputes, LO resolution</td>
+</tr>
+<tr>
+<td>9-Ball</td>
+<td>Ball-tap scoring, dead balls, 20-point matrix, per-format SL (1–9)</td>
+</tr>
+<tr>
+<td>Handicap</td>
+<td>SL suggestion (8B effective innings over the last 10 wins; 9B PPI) with admin approval</td>
+</tr>
+<tr>
+<td>Profile and standings</td>
+<td>Stats / Teams tabs, public standings</td>
+</tr>
+<tr>
+<td>Payments</td>
+<td>Membership + weekly fees, MoMo / ZaloPay</td>
+</tr>
+<tr>
+<td>Identity</td>
+<td>Zalo login / Mini App; generated Member ID and Team ID</td>
+</tr>
+<tr>
+<td>Platform</td>
+<td>Redis, worker + outbox, rate limiting, structured logs, GKE manifests, migration runner, staging environment</td>
+</tr>
+</tbody></table></div>
+<h3 id="phase-3-growth"><span class="secnum">3.2.3</span> Phase 3: growth</h3>
+<p>Master division, tournaments and brackets, anti-sandbagging anomaly detection, multi-league tenancy (League Operator role), sponsors, 10-Ball / Carom, venue dashboard.</p>
+<h2 id="3-phase-1-user-stories"><span class="secnum">3.3</span> Phase 1 user stories</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Story</th>
+<th>Acceptance criteria</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">US-01</td>
+<td>As a user I sign in with Google</td>
+<td>PKCE + state + nonce; <code>sid</code>/<code>csrf</code> cookies; new users go to <code>/onboarding</code>; errors show a banner</td>
+<td><span class="badge b-built">Built</span></td>
+</tr>
+<tr>
+<td class="nw">US-02</td>
+<td>As a new user I link my member ID</td>
+<td>Preview shows a display name, SL and team; refused if already linked to another account; then <code>/me.playerId</code> is set</td>
+<td><span class="badge b-built">Built</span> UI · <span class="badge b-planned">Planned</span> API</td>
+</tr>
+<tr>
+<td class="nw">US-03</td>
+<td>As a player I see the schedule for my division</td>
+<td>Season/division select, week chips; cards show teams, venue, time, status, points</td>
+<td><span class="badge b-parked">Parked</span>· <span class="badge b-planned">Planned</span></td>
+</tr>
+<tr>
+<td class="nw">US-04</td>
+<td>As anyone I open a night</td>
+<td>Both rosters with SL, MW/MP, points (<code>player_division_stats</code>); 5 matches with snapshots</td>
+<td><span class="badge b-parked">Parked</span>· <span class="badge b-planned">Planned</span></td>
+</tr>
+<tr>
+<td class="nw">US-05</td>
+<td>As a captain I put up a player</td>
+<td>Only on my own night; list shows <code>canPutUp</code> + reason; <code>would_break_23</code> reads the division cap; the server re-checks (<code>40004</code>)</td>
+<td><span class="badge b-parked">Parked</span>· <span class="badge b-planned">Planned</span></td>
+</tr>
+<tr>
+<td class="nw">US-06</td>
+<td>As a captain I enter a result</td>
+<td>Games ≤ race; points computed by trigger (3/0, 2/1 hill = race − 1, 2/0); night totals roll up</td>
+<td><span class="badge b-parked">Parked</span>· <span class="badge b-planned">Planned</span></td>
+</tr>
+<tr>
+<td class="nw">US-07</td>
+<td>As a captain I submit the night</td>
+<td>Only when all 5 are complete; <code>submitted_by/at</code> set; standings count only submitted nights</td>
+<td><span class="badge b-parked">Parked</span>· <span class="badge b-planned">Planned</span></td>
+</tr>
+<tr>
+<td class="nw">US-08</td>
+<td>As a captain I add a paid member to my roster</td>
+<td>Unpaid → <code>40003</code>; one active roster per player</td>
+<td><span class="badge b-parked">Parked</span>· <span class="badge b-planned">Planned</span></td>
+</tr>
+<tr>
+<td class="nw">US-09</td>
+<td>As an admin I change a player&#39;s SL</td>
+<td>Reason required; history row with author; played matches keep their snapshot</td>
+<td><span class="badge b-parked">Parked</span>· <span class="badge b-planned">Planned</span></td>
+</tr>
+<tr>
+<td class="nw">US-10</td>
+<td>As an admin I transfer a player</td>
+<td>Close the old roster row (<code>left_at</code>) and open the new one</td>
+<td><span class="badge b-parked">Parked</span>· <span class="badge b-planned">Planned</span></td>
+</tr>
+<tr>
+<td class="nw">US-11</td>
+<td>As a player-role user I can&#39;t act</td>
+<td>403 on every write</td>
+<td><span class="badge b-planned">Planned</span></td>
+</tr>
+</tbody></table></div>
+<h2 id="4-next-steps-to-finish-phase-1"><span class="secnum">3.4</span> Next steps to finish Phase 1</h2>
+<ol>
+<li><p><strong>Restore league-be</strong> to plan-2/plan-3 state:</p>
+<ul>
+<li>The <code>team_rosters</code> + CHECK changes.</li>
+<li><code>00002_business_rules.sql</code>.</li>
+<li><code>internal/league</code> + <code>router/league.go</code>.</li>
+<li>The <code>/me</code> role and <code>playerId</code>.</li>
+<li>The member preview/link endpoints.</li>
+<li><code>make migrate</code>/<code>make seed</code>.</li>
+</ul>
+<p>See <a href="15-as-built-vs-target.html">27</a>.</p>
+</li>
+<li><p>Un-park the FE screens per <code>_parked/RESTORE.md</code>, bringing them up to the current conventions (named exports, <code>react-router</code>, <code>queryOptions</code>).</p>
+</li>
+<li><p>Generate FE types from swagger and delete <code>types/league.ts</code>.</p>
+</li>
+<li><p>Run the FE and BE together (browser), then deploy the API to GKE and publish the Google consent screen.</p>
+</li>
+<li><p>Beta: one division, the seed teams, real captains.</p>
+</li>
+</ol>
+
+</article>
+</main>
+<script src="assets/site-data.js"></script>
+<script src="assets/layout.js"></script>
+<script src="assets/search-index.js"></script>
+<script src="assets/site.js"></script>
+</body>
+</html>

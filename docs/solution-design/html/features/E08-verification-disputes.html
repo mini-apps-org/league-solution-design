@@ -1,0 +1,283 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>21 - Score Verification &amp; Disputes · MViP Solution Design</title>
+<link rel="stylesheet" href="../assets/site.css">
+<script src="../assets/boot.js"></script>
+</head>
+<body data-root="../" data-page="features/E08-verification-disputes.html">
+<main id="main" class="content">
+<article class="doc">
+<h1>21 - Score Verification &amp; Disputes</h1>
+<p class="lede">Epic E08 · 1 feature</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Goal</strong></td>
+<td>Both teams agree on the night&#39;s record before it counts. Agreement earns a standings bonus; disagreement becomes a dispute that an admin resolves with an audit trail</td>
+</tr>
+<tr>
+<td><strong>Phase</strong></td>
+<td>2</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><span class="badge b-target">Target</span> Not started. Phase 1 has a single <code>submitted</code> status (<a href="E04-night-operations.html#f15">E04-F15</a>)</td>
+</tr>
+<tr>
+<td><strong>Actors</strong></td>
+<td>Home captain, Away captain, Admin (League Operator)</td>
+</tr>
+<tr>
+<td><strong>Related</strong></td>
+<td><a href="../04-domain-rules.html">04 §8</a> · <a href="../08-scorekeeping-engine.html">08 §6</a> · <a href="../14-open-questions.html">Q30</a></td>
+</tr>
+</tbody></table></div>
+<h2 id="features-by-phase"><span class="secnum">21.1</span> Features by phase</h2>
+<h3 id="phase-1"><span class="secnum">21.1.1</span> Phase 1</h3>
+<p>Nothing. A night is final as soon as one captain or an admin submits it; admins can still edit afterwards.</p>
+<h3 id="phase-2"><span class="secnum">21.1.2</span> Phase 2</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>Feature</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">F31</td>
+<td><a href="E08-verification-disputes.html#f31">Dual-captain verification, bonus, disputes, admin resolution</a></td>
+<td><span class="badge b-target">Target</span></td>
+</tr>
+</tbody></table></div>
+<h2 id="phase-2-deep-dive"><span class="secnum">21.2</span> Phase 2 deep dive</h2>
+<h3 id="what-changes-from-phase-1"><span class="secnum">21.2.1</span> What changes from Phase 1</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E08-verification-disputes-1.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E08-verification-disputes-1.svg" alt="Diagram: 21 - Score Verification &amp; Disputes" loading="lazy" data-diagram-file="features_E08-verification-disputes-1.svg" width="1206" height="492"></a><figcaption><span>Standings and stats count a night only from <code>finalized</code> or <code>finalized · no bonus</code>. In Phase 1 they count from <code>submitted</code>.</span><a class="full" href="../assets/diagrams/features_E08-verification-disputes-1.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="components"><span class="secnum">21.2.2</span> Components</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E08-verification-disputes-2.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E08-verification-disputes-2.svg" alt="Diagram: 21 - Score Verification &amp; Disputes" loading="lazy" data-diagram-file="features_E08-verification-disputes-2.svg" width="1357" height="541"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_E08-verification-disputes-2.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="data-delta"><span class="secnum">21.2.3</span> Data delta</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Object</th>
+<th>Change</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>team_matches.status</code></td>
+<td>Adds <code>awaiting_verification</code>, <code>finalized</code>, <code>finalized_no_bonus</code>, <code>disputed</code> (Phase 1 <code>submitted</code> maps to <code>awaiting_verification</code>)</td>
+</tr>
+<tr>
+<td><code>team_matches</code></td>
+<td>+ <code>snapshot_json jsonb</code>, <code>snapshot_hash text</code>, <code>verification_deadline timestamptz</code>, <code>bonus_home int</code>, <code>bonus_away int</code></td>
+</tr>
+<tr>
+<td><code>verifications (team_match_id, team_id, decision, snapshot_hash, comment, user_id, at)</code></td>
+<td>One row per team; latest wins until finalized</td>
+</tr>
+<tr>
+<td><code>disputes (id, team_match_id, opened_by, reason, diff jsonb, status, resolution, corrections jsonb, grant_bonus, resolved_by, resolved_at)</code></td>
+<td>Admin queue</td>
+</tr>
+<tr>
+<td><code>team_standings</code> view</td>
+<td>Sums only finalized nights and adds the bonus</td>
+</tr>
+</tbody></table></div>
+
+<h2 id="f31"><span class="secnum">21.3</span> F31 — Dual-captain verification, bonus, disputes, admin resolution</h2>
+<section class="feature"><div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>Status</th>
+<th>Rules</th>
+<th>Repo refs</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>2</td>
+<td><span class="badge b-target">Target</span></td>
+<td>R-110, R-111, R-112, R-113 · <a href="../08-scorekeeping-engine.html">08 §6</a></td>
+<td>Phase 1 analogue: <code>SubmitNightSheet</code> (parked) and <code>POST /team-matches/{id}/submit</code></td>
+</tr>
+</tbody></table></div>
+<h3 id="f31-requirements"><span class="secnum">21.3.1</span> Requirements</h3>
+<p><em>As a captain, after the last match I check the night&#39;s summary and confirm it. When both teams confirm the same record, we each get a bonus. If something&#39;s wrong, I reject it with a reason and an admin sorts it out.</em></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Requirement</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">FR-31.1</td>
+<td><strong>Submit</strong> (all 5 slots complete or forfeit) builds a canonical snapshot: per match the member ID, SL, games won/needed (or points/target), points, innings, DS; plus team totals. Keys sorted, no whitespace; <code>snapshot_hash = sha256(json)</code></td>
+</tr>
+<tr>
+<td class="nw">FR-31.2</td>
+<td>Status → <code>awaiting_verification</code>, <code>verification_deadline = ended_at + 24 h</code> (R-112, configurable per division)</td>
+</tr>
+<tr>
+<td class="nw">FR-31.3</td>
+<td>Each team&#39;s captain (or co-captain) sees the summary and sends `VERIFY {decision: confirm</td>
+</tr>
+<tr>
+<td class="nw">FR-31.4</td>
+<td><strong>Both confirm with the server hash</strong> → <code>finalized</code>, and each team gets the bonus: +1 (8-Ball) or +10 (9-Ball) (R-110)</td>
+</tr>
+<tr>
+<td class="nw">FR-31.5</td>
+<td><strong>Any reject</strong> → <code>disputed</code> with a dispute row. <strong>Dual-device mode</strong> (each team scored its own stream): the server diffs the two projections field by field and a mismatch opens a dispute automatically (R-111)</td>
+</tr>
+<tr>
+<td class="nw">FR-31.6</td>
+<td><strong>Deadline passes</strong> with fewer than two confirms → <code>finalized_no_bonus</code> for both teams (worker sweep every 5 min)</td>
+</tr>
+<tr>
+<td class="nw">FR-31.7</td>
+<td><strong>Admin resolution:</strong> the admin sees the snapshot, the diff, the comments and the event log; applies corrections (as <code>ADMIN_CORRECTION</code> events, re-scored by the same rules); chooses whether to grant the bonus; the result is <code>finalized_no_bonus</code> or <code>finalized</code> (if the bonus is granted). All audited (F41)</td>
+</tr>
+<tr>
+<td class="nw">FR-31.8</td>
+<td>Any correction <strong>before</strong> finalization (by an admin) changes the hash and clears earlier confirms; both captains are asked again</td>
+</tr>
+<tr>
+<td class="nw">FR-31.9</td>
+<td>Notifications (F40): &quot;Please verify tonight&#39;s result&quot;, &quot;Result disputed&quot;, &quot;Dispute resolved&quot;</td>
+</tr>
+</tbody></table></div>
+<h3 id="f31-logic-verification-state-machine"><span class="secnum">21.3.2</span> Logic: verification state machine</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E08-verification-disputes-f31-1.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E08-verification-disputes-f31-1.svg" alt="Diagram: 21 - Score Verification &amp; Disputes" loading="lazy" data-diagram-file="features_E08-verification-disputes-f31-1.svg" width="907" height="882"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_E08-verification-disputes-f31-1.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="f31-flow-happy-path-and-dispute"><span class="secnum">21.3.3</span> Flow: happy path and dispute</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E08-verification-disputes-f31-2.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E08-verification-disputes-f31-2.svg" alt="Diagram: 21 - Score Verification &amp; Disputes" loading="lazy" data-diagram-file="features_E08-verification-disputes-f31-2.svg" width="1481" height="845"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_E08-verification-disputes-f31-2.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="f31-ui"><span class="secnum">21.3.4</span> UI</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Screen</th>
+<th>Content</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Verify sheet (captain)</td>
+<td>Totals with a crown on the winner, five match rows (players, SL, games, points), the bonus at stake, the deadline countdown, buttons <strong>Confirm</strong> (primary) and <strong>Something&#39;s wrong</strong></td>
+</tr>
+<tr>
+<td>Reject form</td>
+<td>Pick the match(es) affected, free-text reason, submit</td>
+</tr>
+<tr>
+<td>Night page</td>
+<td>Badge: &quot;Waiting for {team} to verify&quot; · &quot;Verified ✓ +1&quot; · &quot;Disputed&quot; · &quot;Final (no bonus)&quot;</td>
+</tr>
+<tr>
+<td>Admin › Disputes</td>
+<td>Queue sorted by age; detail with a side-by-side diff (red cells), comments, event timeline, correction form, &quot;Grant bonus&quot; toggle, required resolution note</td>
+</tr>
+</tbody></table></div>
+<h3 id="f31-api--data"><span class="secnum">21.3.5</span> API &amp; data</h3>
+<div class="code"><span class="code-lang">json</span><button class="copy" type="button">Copy</button><pre><code class="lang-json">{
+  &quot;teamId&quot;: &quot;&lt;team-uuid&gt;&quot;,
+  &quot;decision&quot;: &quot;confirm&quot;,
+  &quot;snapshotHash&quot;: &quot;9f2c&lt;…&gt;e1&quot;,
+  &quot;comment&quot;: null
+}</code></pre></div>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Error</th>
+<th>When</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>40301</code></td>
+<td>The caller isn&#39;t a captain of that team or an admin</td>
+</tr>
+<tr>
+<td><code>40940</code></td>
+<td>The hash doesn&#39;t match the current snapshot</td>
+</tr>
+<tr>
+<td><code>40941</code></td>
+<td>The night isn&#39;t awaiting verification</td>
+</tr>
+<tr>
+<td><code>40942</code></td>
+<td>The team has already confirmed this hash</td>
+</tr>
+</tbody></table></div>
+<h3 id="f31-edge-cases"><span class="secnum">21.3.6</span> Edge cases</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Situation</th>
+<th>Expected</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">EC-31.1</td>
+<td>Deadline passes with one confirm</td>
+<td><code>finalized_no_bonus</code> for <strong>both</strong> teams (<a href="../08-scorekeeping-engine.html">08 §8 #13</a>)</td>
+</tr>
+<tr>
+<td class="nw">EC-31.2</td>
+<td>A captain plays for both teams (impossible by roster rules)</td>
+<td>Guarded by F39c; verification needs a distinct captain per team</td>
+</tr>
+<tr>
+<td class="nw">EC-31.3</td>
+<td>Captain confirms, then spots an error before the other confirms</td>
+<td>They can change to reject until finalized</td>
+</tr>
+<tr>
+<td class="nw">EC-31.4</td>
+<td>Admin edits a finalized night</td>
+<td>A post-final correction re-scores and audits; the bonus stays as decided</td>
+</tr>
+<tr>
+<td class="nw">EC-31.5</td>
+<td>Forfeit slots</td>
+<td>Included in the snapshot as `forfeit: home</td>
+</tr>
+</tbody></table></div>
+<h3 id="f31-acceptance-criteria"><span class="secnum">21.3.7</span> Acceptance criteria</h3>
+<ul>
+<li><strong>AC-31.1</strong> Given both captains confirm the same hash, then the night is finalized and each team&#39;s standings rise by its points plus 1 (8-Ball).</li>
+<li><strong>AC-31.2</strong> Given an admin correction after one confirm, then the hash changes and both confirms are needed again.</li>
+<li><strong>AC-31.3</strong> Given 24 h pass with one confirm, then the status is <code>finalized_no_bonus</code> and neither team gets a bonus.</li>
+<li><strong>AC-31.4</strong> Given a dispute is resolved, then <code>audit_log</code> has the corrections, the bonus decision and the note.</li>
+</ul>
+<h3 id="f31-open-questions"><span class="secnum">21.3.8</span> Open questions</h3>
+<ul>
+<li><a href="../14-open-questions.html">Q30</a>: who may submit, and can co-captains verify?</li>
+<li>Is 24 h the right window for this league?</li>
+</ul>
+</section>
+
+</article>
+</main>
+<script src="../assets/site-data.js"></script>
+<script src="../assets/layout.js"></script>
+<script src="../assets/search-index.js"></script>
+<script src="../assets/site.js"></script>
+</body>
+</html>

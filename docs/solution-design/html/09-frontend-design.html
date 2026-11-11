@@ -1,0 +1,350 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>09 - Frontend Design (league-fe) · MViP Solution Design</title>
+<link rel="stylesheet" href="assets/site.css">
+<script src="assets/boot.js"></script>
+</head>
+<body data-root="" data-page="09-frontend-design.html">
+<main id="main" class="content">
+<article class="doc">
+<h1>09 - Frontend Design (league-fe)</h1>
+
+<p>Repo: <code>league-fe</code> (GitHub <code>mini-apps-org/league-fe</code>). Tags 0.1.0–0.1.4.</p>
+<blockquote>
+<p><span class="badge b-built">Built</span> live in <code>src/</code> · <span class="badge b-parked">Parked</span> in <code>_parked/</code> (built, not compiled; restore per <code>_parked/RESTORE.md</code>) · <span class="badge b-target">Target</span></p>
+</blockquote>
+<h2 id="1-stack-"><span class="secnum">9.1</span> Stack (<span class="badge b-built">Built</span>)</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Concern</th>
+<th>Choice</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>App shape</td>
+<td><strong>Single Vite app</strong> (no monorepo / Turborepo). pnpm 10.15, Node ≥ 24 (<code>.nvmrc</code>)</td>
+</tr>
+<tr>
+<td>UI</td>
+<td><strong>React 19.3</strong>, TypeScript ~6.0 (strict, <code>noUncheckedIndexedAccess</code>)</td>
+</tr>
+<tr>
+<td>Build</td>
+<td><strong>Vite 8.3</strong>, dev server on port 5174. A production build fails if <code>VITE_API_URL</code> is unset</td>
+</tr>
+<tr>
+<td>Styling</td>
+<td><strong>Tailwind 4.3</strong> via <code>@tailwindcss/vite</code> (no config file), tokens in <code>src/index.css</code></td>
+</tr>
+<tr>
+<td>Components</td>
+<td><strong>shadcn</strong> CLI 4 (<code>radix-nova</code> style, neutral base, lucide icons), Radix UI, vaul (Drawer), sonner (toasts), next-themes (system/light/dark)</td>
+</tr>
+<tr>
+<td>Server state</td>
+<td><strong>TanStack React Query 5</strong> with <code>queryOptions</code> factories</td>
+</tr>
+<tr>
+<td>Routing</td>
+<td><strong>react-router 7</strong> (<code>createBrowserRouter</code>; never <code>react-router-dom</code>)</td>
+</tr>
+<tr>
+<td>HTTP</td>
+<td><strong>axios</strong> (<code>withCredentials</code>) wrapped in <code>BaseAPI</code></td>
+</tr>
+<tr>
+<td>Validation</td>
+<td>zod 4, used only by parked forms</td>
+</tr>
+<tr>
+<td>i18n</td>
+<td>i18next + react-i18next. <strong><code>en</code> default/fallback</strong>, <code>vi</code>. Choice stored in <code>localStorage.locale</code></td>
+</tr>
+<tr>
+<td>Tests</td>
+<td>Vitest 5, jsdom, Testing Library, <strong>MSW 3</strong>. No Playwright (ask before adding)</td>
+</tr>
+<tr>
+<td>Quality</td>
+<td>ESLint 9 flat config (typescript-eslint, react-hooks, jsx-a11y, tanstack-query, simple-import-sort), Prettier + tailwind plugin, husky (pre-commit lint-staged + typecheck; commit-msg commitlint; pre-push tests)</td>
+</tr>
+<tr>
+<td>Not used</td>
+<td>No zustand, react-hook-form or ky. <strong>The dependency list is closed</strong>; adding one needs approval</td>
+</tr>
+</tbody></table></div>
+<h2 id="2-source-tree"><span class="secnum">9.2</span> Source tree</h2>
+<div class="code"><span class="code-lang">text</span><button class="copy" type="button">Copy</button><pre><code class="lang-text">src/
+├─ main.tsx              # StrictMode › ThemeProvider › QueryClientProvider › RouterProvider + Toaster; registers SW
+├─ api/                  # the ONLY place that touches axios
+│  ├─ axios.ts           # instance, CSRF + 401 interceptors
+│  ├─ baseAPI.ts         # get/post/put/patch/delete, serializeParams, withQuery
+│  ├─ endpoints.ts       # ENDPOINTS, API_BASE
+│  ├─ authAPI.ts         # getGoogleSignInURL, fetchMe, logout
+│  └─ leagueAPI.ts       # 13 league endpoints (used by parked screens)
+├─ queries/              # queryOptions factories: auth.ts ['auth','me'], members.ts ['members','preview',id]
+├─ hooks/                # useMe/useLogout, useMemberPreview/useLinkMember, useRole/useIsAdmin, useLoginError
+├─ lib/                  # pure logic + tests: csrf, errors, member-id, navigate, query-client, register-sw, icons
+├─ types/                # api.ts (ApiEnvelope&lt;T&gt;), auth.ts, errors.ts, league.ts (TEMPORARY hand-written)
+├─ components/           # AppHeader, AppLayout, AppSkeleton, RequireAuth, ThemeToggle, UserAvatar,
+│  ├─ auth/              # AppMark, GoogleMark, GoogleSignInButton, LegalLine, LegalPageLayout, MemberPreviewCard
+│  ├─ league/            # SkillLevelSquare
+│  └─ ui/                # shadcn-owned (avatar, button, card, dialog, drawer, dropdown-menu, input, label, select, skeleton, sonner, tabs, textarea, toggle, toggle-group)
+├─ pages/                # auth/LoginPage, HomePage, OnboardingPage, RulesPage, PrivacyPage, NotFoundPage, RouteErrorPage
+├─ router/index.tsx
+├─ i18n/                 # index.ts, en.json, vi.json, i18next.d.ts (vi must have every en key)
+└─ test/                 # setup.ts, server.ts (msw), handlers.ts, render.tsx (renderRoutes, renderWithProviders)
+_parked/src/             # parked league screens, 17 components, RequireAdmin, useLeague*, lib/rules.ts, night.ts, schemas.ts, format.ts</code></pre></div>
+<h2 id="3-conventions-from-claudemd-and-clauderules"><span class="secnum">9.3</span> Conventions (from <code>CLAUDE.md</code> and <code>.claude/rules/*</code>)</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Area</th>
+<th>Rule</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Naming verbs</td>
+<td><code>fetch*</code> = HTTP, <code>get*</code> = sync read, <code>use*</code> = hook, <code>handle*</code> = handler inside a component, <code>on*</code> = handler prop. Constants are <code>SCREAMING_SNAKE_CASE</code>. Use domain words (put-up, night, race, skill level)</td>
+</tr>
+<tr>
+<td>Size</td>
+<td>Files ≤ 300 lines, functions ≤ 3 params, nesting ≤ 2. No boolean flag params</td>
+</tr>
+<tr>
+<td>TypeScript</td>
+<td>No <code>enum</code> (use <code>as const</code> / unions). <code>import type</code>. Block bodies with an explicit <code>return</code>; one-line arrows only as array callbacks</td>
+</tr>
+<tr>
+<td>Modules</td>
+<td>Named exports only. Sorted imports. Cross-folder imports via <code>@/</code>. No <code>fetch</code>/<code>axios</code> outside <code>src/api</code>. Business logic is pure functions in <code>src/lib</code> with a sibling test</td>
+</tr>
+<tr>
+<td>React 19</td>
+<td>No <code>forwardRef</code>. <code>&lt;Ctx value&gt;</code> instead of <code>.Provider</code>. <code>useOptimistic</code> / <code>useActionState</code> / <code>useFormStatus</code> for mutations and forms. Effects only sync external systems. Server state stays in React Query, never copied to <code>useState</code>. React Compiler off; memoize only with a measured cost. One component per file</td>
+</tr>
+<tr>
+<td>shadcn</td>
+<td><code>components/ui</code> is CLI-owned (<code>pnpm dlx shadcn add</code>), never hand-edited. Confirmations and panels are vaul <strong>Drawers</strong>, never <code>window.confirm</code>. Variants via <code>cva</code>, merge via <code>cn</code>. Semantic tokens only (no hex, lint-enforced). <strong>44 px</strong> tap targets (<code>size-11</code>/<code>h-11</code>). Icons only through <code>lib/icons.ts</code>. No emoji</td>
+</tr>
+<tr>
+<td>Copy</td>
+<td>No hard-coded strings, including <code>aria-label</code>, <code>placeholder</code>, <code>title</code> and <code>alt</code>. Errors render <code>apiError.&lt;code&gt;</code></td>
+</tr>
+<tr>
+<td>Testing</td>
+<td>Tests sit beside the code. Query by role → label → text. <code>userEvent</code>. <code>renderWithProviders</code>. <strong>Network mocked only with MSW</strong>; unhandled requests fail. Assert copy via <code>i18next.t</code></td>
+</tr>
+<tr>
+<td>Git</td>
+<td>Conventional commits (commitlint). The agent never commits or pushes unless asked</td>
+</tr>
+<tr>
+<td>TODOs</td>
+<td><code>TODO(&lt;Notion URL&gt;)</code> only</td>
+</tr>
+</tbody></table></div>
+<h2 id="4-routes-and-screens"><span class="secnum">9.4</span> Routes and screens</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Route</th>
+<th>Screen</th>
+<th>Access</th>
+<th>Status</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>/login</code></td>
+<td>Login</td>
+<td>public (signed-in users redirect to <code>/</code>)</td>
+<td><span class="badge b-built">Built</span></td>
+<td>Full-page link to <code>{VITE_API_URL}/api/v1/auth/google/login</code>. Banner for <code>?error=cancelled|login_failed|server_error</code></td>
+</tr>
+<tr>
+<td><code>/onboarding</code></td>
+<td>Link member ID</td>
+<td>session, no layout</td>
+<td><span class="badge b-built">Built</span> UI / <span class="badge b-planned">Planned</span> API</td>
+<td>Enter 8-digit member ID → <code>GET /members/preview</code> → <code>MemberPreviewCard</code> → <code>POST /me/link</code></td>
+</tr>
+<tr>
+<td><code>/</code></td>
+<td>Home → <strong>Schedule</strong></td>
+<td>session</td>
+<td><span class="badge b-built">Built</span> placeholder / <span class="badge b-parked">Parked</span><code>SchedulePage</code></td>
+<td>Season/division select, week chips, fixture cards (status badge, points)</td>
+</tr>
+<tr>
+<td><code>/matches/:id</code></td>
+<td><strong>Team roster / night</strong></td>
+<td>session</td>
+<td><span class="badge b-parked">Parked</span><code>MatchPage</code></td>
+<td>Both rosters (name, member ID, SL, MW/MP, points), 5-match scoresheet, night action bar</td>
+</tr>
+<tr>
+<td><code>/matches/:id/put-up</code></td>
+<td><strong>Put-up</strong></td>
+<td>captain (own night) / admin</td>
+<td><span class="badge b-parked">Parked</span><code>PutUpPage</code></td>
+<td><code>PutUpCandidateList</code> with <code>x/23</code> and block reasons</td>
+</tr>
+<tr>
+<td><code>/matches/:id/result/:order</code></td>
+<td><strong>Enter result</strong></td>
+<td>captain (own night) / admin</td>
+<td><span class="badge b-parked">Parked</span><code>ResultPage</code></td>
+<td>Steppers for games (capped at race), innings, DS; <code>ResultVerdict</code> previews points via <code>rules.ts</code>; server value wins</td>
+</tr>
+<tr>
+<td>(drawer)</td>
+<td><strong>Night summary &amp; submit</strong></td>
+<td>captain / admin</td>
+<td><span class="badge b-parked">Parked</span><code>SubmitNightSheet</code></td>
+<td>Team totals, submit</td>
+</tr>
+<tr>
+<td><code>/admin/players</code></td>
+<td><strong>Admin players</strong></td>
+<td>admin (<code>RequireAdmin</code>)</td>
+<td><span class="badge b-parked">Parked</span><code>PlayersPage</code></td>
+<td>Search, SL change with reason (<code>SkillLevelPanel</code>), history, transfer, add paid member</td>
+</tr>
+<tr>
+<td><code>/rules</code>, <code>/privacy</code></td>
+<td>Legal</td>
+<td>public</td>
+<td><span class="badge b-built">Built</span> placeholder</td>
+<td></td>
+</tr>
+<tr>
+<td><code>*</code></td>
+<td>Not found</td>
+<td>public</td>
+<td><span class="badge b-built">Built</span></td>
+<td></td>
+</tr>
+<tr>
+<td>—</td>
+<td>Profile (Stats / Teams / Tournaments)</td>
+<td>session</td>
+<td><span class="badge b-target">Target</span> Phase 2</td>
+<td><a href="04-domain-rules.html#12-statistics-and-profile-metrics">04 §12</a>, over <code>player_division_stats</code></td>
+</tr>
+<tr>
+<td>—</td>
+<td>Standings</td>
+<td>public</td>
+<td><span class="badge b-target">Target</span> Phase 2</td>
+<td>Over <code>team_standings</code></td>
+</tr>
+<tr>
+<td>—</td>
+<td>Coin flip, live scoring (Screen 5), verification</td>
+<td>captain</td>
+<td><span class="badge b-target">Target</span> Phase 2</td>
+<td><a href="08-scorekeeping-engine.html">08</a></td>
+</tr>
+</tbody></table></div>
+<h3 id="41-mvp-night-flow-<span class="badge b-parked">Parked</span>">4.1 MVP night flow (<span class="badge b-parked">Parked</span>)</h3>
+<figure class="diagram"><a class="diagram-img" href="assets/diagrams/09-frontend-design-1.svg" target="_blank" aria-label="Open diagram full screen"><img src="assets/diagrams/09-frontend-design-1.svg" alt="Diagram: 09 - Frontend Design (league-fe)" loading="lazy" data-diagram-file="09-frontend-design-1.svg" width="1095" height="326"></a><figcaption><span></span><a class="full" href="assets/diagrams/09-frontend-design-1.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<p><code>_parked/src/lib/night.ts</code> holds <code>MATCHES_PER_NIGHT = 5</code>, <code>firstPutUpFor(order)</code> (home puts up first on odd matches) and a <code>nextAction</code> state machine.</p>
+<h2 id="5-auth-client-"><span class="secnum">9.5</span> Auth client (<span class="badge b-built">Built</span>)</h2>
+<figure class="diagram"><a class="diagram-img" href="assets/diagrams/09-frontend-design-2.svg" target="_blank" aria-label="Open diagram full screen"><img src="assets/diagrams/09-frontend-design-2.svg" alt="Diagram: 09 - Frontend Design (league-fe)" loading="lazy" data-diagram-file="09-frontend-design-2.svg" width="1271" height="647"></a><figcaption><span></span><a class="full" href="assets/diagrams/09-frontend-design-2.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<ul>
+<li><strong>No token storage in JS.</strong> The session is the HttpOnly <code>sid</code> cookie. The only value in <code>localStorage</code> is <code>locale</code>.</li>
+<li><strong>CSRF interceptor:</strong> on unsafe methods, read cookie <code>__Secure-csrf</code> (prod) or <code>csrf</code> (dev/staging) and send <code>X-CSRF-Token</code>.</li>
+<li><strong>401 interceptor:</strong> <code>window.location.assign(&#39;/login&#39;)</code>, except for <code>/me</code> itself. There is no refresh flow.</li>
+<li><strong><code>RequireAuth</code>:</strong> <code>useMe</code> (<code>retry: false</code>). While pending it shows <code>AppSkeleton</code>; on error it navigates to <code>/login</code> with <code>state.from</code>. <code>playerId === null</code> → <code>/onboarding</code>.</li>
+<li><strong>Logout:</strong> <code>POST /auth/logout</code> → clear the query cache → <code>/login</code>.</li>
+<li><strong>Errors:</strong> <code>toApiError</code> normalizes to <code>ApiRequestError(status, code, message)</code>. An unknown code becomes <code>50001</code>; no response gives status 0. The UI shows <code>messageFor(err)</code>.</li>
+<li><strong>Query defaults:</strong> no retry on 4xx, up to 2 retries otherwise; <code>refetchOnWindowFocus: false</code>; mutations never retry.</li>
+</ul>
+<h2 id="6-pwa-"><span class="secnum">9.6</span> PWA (<span class="badge b-built">Built</span>)</h2>
+<ul>
+<li><code>public/manifest.webmanifest</code>: &quot;Billiard League&quot; / &quot;Bida&quot;, standalone, portrait, theme <code>#1F6FEB</code>, icons 192/512/maskable.</li>
+<li><code>public/sw.js</code> (production only, cache <code>bida-static-v1</code>): cache-first for <code>/assets/*</code>, icons and the manifest. It <strong>never caches HTML or <code>/api/v1</code></strong>, so one user&#39;s signed-in page can&#39;t be shown to the next user on a shared club device.</li>
+<li><span class="badge b-target">Target</span> Phase 2 offline scoring needs an IndexedDB event queue. The rule above still holds: cache app data in IndexedDB keyed by user, never in the HTTP cache.</li>
+</ul>
+<h2 id="7--phase-2-frontend-additions"><span class="secnum">9.7</span> <span class="badge b-target">Target</span> Phase 2+ frontend additions</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Addition</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Generated API types</td>
+<td><code>openapi-typescript</code> from league-be swagger (needs swagger 3 or a conversion step). Delete <code>types/league.ts</code></td>
+</tr>
+<tr>
+<td>Live scoring screens</td>
+<td>Coin flip, lag, Screen 5 (turn over / DS / timeouts / 6 outcomes), offline queue. Needs a client state store; propose a dependency (e.g. zustand) for approval</td>
+</tr>
+<tr>
+<td>Zalo Mini App build</td>
+<td>Separate target or wrapper. Zalo login would need a backend identity provider beside Google</td>
+</tr>
+<tr>
+<td>Language switcher</td>
+<td>Keys exist; there is no UI yet. Consider <code>vi</code> as the default for the Vietnam launch</td>
+</tr>
+<tr>
+<td>Playwright E2E</td>
+<td>Two-captain night flow (ask before adding the dependency)</td>
+</tr>
+<tr>
+<td>Profile and standings</td>
+<td>Over the existing views</td>
+</tr>
+</tbody></table></div>
+<h2 id="8-testing-"><span class="secnum">9.8</span> Testing (<span class="badge b-built">Built</span>)</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Level</th>
+<th>Tooling</th>
+<th>Current coverage</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Unit</td>
+<td>Vitest</td>
+<td><code>lib/errors</code>, <code>lib/member-id</code>; <span class="badge b-parked">Parked</span><code>rules.test.ts</code>, <code>night.test.ts</code></td>
+</tr>
+<tr>
+<td>Component</td>
+<td>Testing Library + MSW</td>
+<td><code>RequireAuth</code>, <code>OnboardingPage</code></td>
+</tr>
+<tr>
+<td>Default MSW handlers</td>
+<td><code>src/test/handlers.ts</code></td>
+<td><code>/me</code>, logout, fixtures</td>
+</tr>
+<tr>
+<td>E2E</td>
+<td>—</td>
+<td><span class="badge b-target">Target</span> Playwright</td>
+</tr>
+</tbody></table></div>
+<p>CI (<code>.github/workflows/ci.yaml</code>) runs <code>format:check</code>, <code>lint</code> (zero warnings), <code>typecheck</code>, <code>test</code> and <code>build</code> on every PR to <code>dev</code>/<code>master</code>.</p>
+
+</article>
+</main>
+<script src="assets/site-data.js"></script>
+<script src="assets/layout.js"></script>
+<script src="assets/search-index.js"></script>
+<script src="assets/site.js"></script>
+</body>
+</html>

@@ -1,0 +1,454 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>16 - Schedule &amp; Night View · MViP Solution Design</title>
+<link rel="stylesheet" href="../assets/site.css">
+<script src="../assets/boot.js"></script>
+</head>
+<body data-root="../" data-page="features/E03-schedule-night.html">
+<main id="main" class="content">
+<article class="doc">
+<h1>16 - Schedule &amp; Night View</h1>
+<p class="lede">Epic E03 · 3 features</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Goal</strong></td>
+<td>Anyone can find a fixture and see the state of a night. Captains see what to do next</td>
+</tr>
+<tr>
+<td><strong>Phase</strong></td>
+<td>1 (F11, F12) · 2 (F39a Bye / No Play)</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><span class="badge b-parked">Parked</span> Screens built in <code>league-fe/_parked/</code>, waiting for the E02 API</td>
+</tr>
+<tr>
+<td><strong>Actors</strong></td>
+<td>Player, Captain, Admin</td>
+</tr>
+<tr>
+<td><strong>Related</strong></td>
+<td><a href="../09-frontend-design.html">09 §4 routes</a> · <a href="../07-api-design.html">07 §2</a> · <a href="E04-night-operations.html">E04</a></td>
+</tr>
+</tbody></table></div>
+<h2 id="features-by-phase"><span class="secnum">16.1</span> Features by phase</h2>
+<h3 id="phase-1"><span class="secnum">16.1.1</span> Phase 1</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>Feature</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">F11</td>
+<td><a href="E03-schedule-night.html#f11">Schedule</a></td>
+<td><span class="badge b-parked">Parked</span></td>
+</tr>
+<tr>
+<td class="nw">F12</td>
+<td><a href="E03-schedule-night.html#f12">Night view &amp; scoresheet</a></td>
+<td><span class="badge b-parked">Parked</span></td>
+</tr>
+</tbody></table></div>
+<h3 id="phase-2"><span class="secnum">16.1.2</span> Phase 2</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>Feature</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">F39a</td>
+<td><a href="E03-schedule-night.html#f39a">Bye no play</a></td>
+<td><span class="badge b-target">Target</span></td>
+</tr>
+</tbody></table></div>
+<h2 id="phase-1-deep-dive"><span class="secnum">16.2</span> Phase 1 deep dive</h2>
+<h3 id="components"><span class="secnum">16.2.1</span> Components</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E03-schedule-night-1.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E03-schedule-night-1.svg" alt="Diagram: 16 - Schedule &amp; Night View" loading="lazy" data-diagram-file="features_E03-schedule-night-1.svg" width="1849" height="448"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_E03-schedule-night-1.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="main-flow"><span class="secnum">16.2.2</span> Main flow</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E03-schedule-night-2.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E03-schedule-night-2.svg" alt="Diagram: 16 - Schedule &amp; Night View" loading="lazy" data-diagram-file="features_E03-schedule-night-2.svg" width="1079" height="800"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_E03-schedule-night-2.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h2 id="phase-2-deep-dive"><span class="secnum">16.3</span> Phase 2 deep dive</h2>
+<p><strong>Scope:</strong> <a href="E03-schedule-night.html#f39a">F39a Bye and No-Play weeks</a>. Phase 1 assumes every week has a full round of fixtures. Phase 2 models the calendar (<code>schedule_weeks</code>), byes for odd team counts, and an admin schedule generator.</p>
+<h3 id="components-what-phase-2-adds"><span class="secnum">16.3.1</span> Components: what Phase 2 adds</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E03-schedule-night-3.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E03-schedule-night-3.svg" alt="Diagram: 16 - Schedule &amp; Night View" loading="lazy" data-diagram-file="features_E03-schedule-night-3.svg" width="1087" height="426"></a><figcaption><span>Dashed boxes are new. The schedule page and fixture list gain fields but keep their shape.</span><a class="full" href="../assets/diagrams/features_E03-schedule-night-3.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="week-kinds"><span class="secnum">16.3.2</span> Week kinds</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E03-schedule-night-4.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E03-schedule-night-4.svg" alt="Diagram: 16 - Schedule &amp; Night View" loading="lazy" data-diagram-file="features_E03-schedule-night-4.svg" width="865" height="395"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_E03-schedule-night-4.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="data-delta"><span class="secnum">16.3.3</span> Data delta</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Change</th>
+<th>Why</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>New <code>schedule_weeks (division_id, week_no, play_date, kind)</code></td>
+<td>The calendar exists even when a week has no fixtures</td>
+</tr>
+<tr>
+<td><code>team_matches.away_team_id</code> nullable, <code>status</code> gains <code>bye</code>, CHECK <code>(away_team_id IS NULL) = (status = &#39;bye&#39;)</code></td>
+<td>One row per bye keeps standings simple</td>
+</tr>
+<tr>
+<td><code>team_standings</code> view ignores <code>bye</code> rows (default policy)</td>
+<td>A bye is neither a win nor a loss</td>
+</tr>
+<tr>
+<td><code>currentWeek()</code> skips <code>NO_PLAY</code> weeks</td>
+<td>The schedule opens on the next real week</td>
+</tr>
+</tbody></table></div>
+
+<h2 id="f11"><span class="secnum">16.4</span> F11 — Schedule</h2>
+<section class="feature"><div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>Status</th>
+<th>Repo refs</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1</td>
+<td><span class="badge b-parked">Parked</span></td>
+<td><code>league-fe/_parked/src/pages/SchedulePage.tsx</code>, <code>components/league/{WeekChips,FixtureCard,StatusBadge,EmptyState,ErrorBanner}.tsx</code>, <code>hooks/useLeague.ts</code>, <code>lib/format.ts</code></td>
+</tr>
+</tbody></table></div>
+<h3 id="f11-requirements"><span class="secnum">16.4.1</span> Requirements</h3>
+<p><em>As a player, I open the app and immediately see this week&#39;s fixtures for my division.</em></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Requirement</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">FR-11.1</td>
+<td>Load seasons; the active season is the one with <code>isActive</code>, falling back to the first</td>
+</tr>
+<tr>
+<td class="nw">FR-11.2</td>
+<td>One native select lists every division of the active season as &quot;{season} · {division}&quot; (44 px)</td>
+</tr>
+<tr>
+<td class="nw">FR-11.3</td>
+<td>Fetch all fixtures of the division once (<code>[&#39;fixtures&#39;, divisionId]</code>) and filter by week on the client</td>
+</tr>
+<tr>
+<td class="nw">FR-11.4</td>
+<td>Default week = the earliest week that has a fixture not yet <code>submitted</code>. If all are submitted, the last week</td>
+</tr>
+<tr>
+<td class="nw">FR-11.5</td>
+<td>Week chips &quot;W{n}&quot; in a <code>role=group</code> with <code>aria-pressed</code>, horizontally scrollable. The selected chip scrolls into view on mount</td>
+</tr>
+<tr>
+<td class="nw">FR-11.6</td>
+<td>A fixture card (the whole card is a link, at least 88 px) shows home <code>{number} {name}</code>, a screen-reader &quot;vs&quot;, away, the venue, &quot;Tue 10 Nov, 19:30&quot;, a status badge, and the score once the night isn&#39;t <code>scheduled</code></td>
+</tr>
+<tr>
+<td class="nw">FR-11.7</td>
+<td>Status badge: <code>scheduled</code> → chip &quot;Scheduled&quot;, <code>in_progress</code> → accent &quot;In progress&quot;, <code>submitted</code> → ok &quot;Submitted&quot;</td>
+</tr>
+<tr>
+<td class="nw">FR-11.8</td>
+<td>Changing division resets the chosen week</td>
+</tr>
+<tr>
+<td class="nw">FR-11.9</td>
+<td>At ≥ 1024 px: 2-column card grid, max width 960</td>
+</tr>
+</tbody></table></div>
+<h3 id="f11-logic"><span class="secnum">16.4.2</span> Logic</h3>
+<div class="code"><span class="code-lang">text</span><button class="copy" type="button">Copy</button><pre><code class="lang-text">currentWeek(fixtures):
+  weeks = sorted unique fixtures.weekNo
+  return first w in weeks where any fixture(w).status != 'submitted'
+         else last(weeks)</code></pre></div>
+<h3 id="f11-ui-states"><span class="secnum">16.4.3</span> UI states</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>State</th>
+<th>Shown</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Loading</td>
+<td>Select skeleton + chip skeleton + three 88 px card skeletons</td>
+</tr>
+<tr>
+<td>Error</td>
+<td><code>ErrorBanner</code> + Retry (refetches seasons, divisions and fixtures)</td>
+</tr>
+<tr>
+<td>No active season</td>
+<td>&quot;No active season&quot; · &quot;An admin needs to create a season and a division first.&quot;</td>
+</tr>
+<tr>
+<td>Empty week</td>
+<td><code>CalendarOff</code> · &quot;No fixtures this week&quot; · &quot;Try another week or session.&quot;</td>
+</tr>
+</tbody></table></div>
+<h3 id="f11-edge-cases"><span class="secnum">16.4.4</span> Edge cases</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Situation</th>
+<th>Expected</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">EC-11.1</td>
+<td>Fixture <code>scheduled_at</code> is invalid or missing</td>
+<td>Date text is empty; the card still renders</td>
+</tr>
+<tr>
+<td class="nw">EC-11.2</td>
+<td>Division has no fixtures at all</td>
+<td>No chips; empty state</td>
+</tr>
+<tr>
+<td class="nw">EC-11.3</td>
+<td>390 px wide phone</td>
+<td>No horizontal page scroll; only the chips scroll</td>
+</tr>
+<tr>
+<td class="nw">EC-11.4</td>
+<td>User is on two teams in different divisions (Phase 2)</td>
+<td>Default the division to the user&#39;s next fixture</td>
+</tr>
+</tbody></table></div>
+<h3 id="f11-acceptance-criteria"><span class="secnum">16.4.5</span> Acceptance criteria</h3>
+<ul>
+<li><strong>AC-11.1</strong> With the seed, &quot;8-Ball Open&quot; defaults to W10 and shows 2 fixtures.</li>
+<li><strong>AC-11.2</strong> Switching chips changes the list without a spinner on the whole page.</li>
+</ul>
+<h3 id="f11-implementation-gaps-_parked"><span class="secnum">16.4.6</span> Implementation gaps (<code>_parked</code>)</h3>
+<ul>
+<li>The selected chip isn&#39;t scrolled into view on mount.</li>
+<li>The chip label &quot;W10&quot; vs &quot;Week 10&quot; is undecided; the key <code>schedule.week</code> exists but is unused.</li>
+<li>Still on parked conventions (default exports, <code>react-router-dom</code>, inline query keys). Follow <code>RESTORE.md</code>.</li>
+</ul>
+</section>
+
+<h2 id="f12"><span class="secnum">16.5</span> F12 — Night view and scoresheet</h2>
+<section class="feature"><div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>Status</th>
+<th>Repo refs</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1</td>
+<td><span class="badge b-parked">Parked</span></td>
+<td><code>_parked/src/pages/MatchPage.tsx</code>, <code>components/league/{ScoreStrip,RosterPanel,RosterTable,NightScoresheet,DesktopScoresheet,NightActionBar}.tsx</code>, <code>lib/night.ts</code></td>
+</tr>
+</tbody></table></div>
+<h3 id="f12-requirements"><span class="secnum">16.5.1</span> Requirements</h3>
+<p><em>As a captain, I open tonight&#39;s match and see both rosters, the five match slots, and the one thing I need to do next.</em></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Requirement</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">FR-12.1</td>
+<td>Header: back link, &quot;{homeNo} vs {awayNo}&quot;, venue · date, status badge</td>
+</tr>
+<tr>
+<td class="nw">FR-12.2</td>
+<td>Score strip (30 px numerals) once any result exists</td>
+</tr>
+<tr>
+<td class="nw">FR-12.3</td>
+<td>Rosters from <code>player_division_stats</code>: name + member ID (+ &quot;· Unpaid&quot;), SL square, MW/MP &quot;3/5&quot;, points. A new player shows 0/0 and 0, never blank</td>
+</tr>
+<tr>
+<td class="nw">FR-12.4</td>
+<td>Mobile: Home/Away tabs, defaulting to <code>viewerSide ?? &#39;home&#39;</code>. ≥ 1024 px: both rosters side by side</td>
+</tr>
+<tr>
+<td class="nw">FR-12.5</td>
+<td>Scoresheet with always five rows &quot;Match n&quot;: SL square, name and games per side; &quot;Not played&quot; when empty; winner highlighted. Desktop is a real table with a &quot;Night summary&quot; footer</td>
+</tr>
+<tr>
+<td class="nw">FR-12.6</td>
+<td>Action bar only when <code>viewerCanManage</code>. It&#39;s driven by <code>nextAction()</code></td>
+</tr>
+<tr>
+<td class="nw">FR-12.7</td>
+<td>After submit: the bar shows &quot;Submitted by {name} · {time}&quot;; captains see no edit controls; admins still do</td>
+</tr>
+</tbody></table></div>
+<h3 id="f12-logic-nextaction"><span class="secnum">16.5.2</span> Logic: <code>nextAction</code></h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E03-schedule-night-f12-1.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E03-schedule-night-f12-1.svg" alt="Diagram: 16 - Schedule &amp; Night View" loading="lazy" data-diagram-file="features_E03-schedule-night-f12-1.svg" width="948" height="1611"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_E03-schedule-night-f12-1.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th><code>nextAction</code></th>
+<th>Bar shows</th>
+<th>Goes to</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>put-up {order, side}</code></td>
+<td>&quot;Put up match {order}&quot;</td>
+<td><code>/matches/:id/put-up</code></td>
+</tr>
+<tr>
+<td><code>result {order, individualMatchId}</code></td>
+<td>&quot;Enter result · match {order}&quot;</td>
+<td><code>/matches/:id/result/:order</code></td>
+</tr>
+<tr>
+<td><code>submit</code></td>
+<td>&quot;Submit night&quot;</td>
+<td><code>SubmitNightSheet</code> drawer</td>
+</tr>
+<tr>
+<td><code>done</code></td>
+<td>&quot;Submitted by {name} · {time}&quot;</td>
+<td>—</td>
+</tr>
+</tbody></table></div>
+<h3 id="f12-ui-layout"><span class="secnum">16.5.3</span> UI: layout</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E03-schedule-night-f12-2.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E03-schedule-night-f12-2.svg" alt="Diagram: 16 - Schedule &amp; Night View" loading="lazy" data-diagram-file="features_E03-schedule-night-f12-2.svg" width="726" height="709"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_E03-schedule-night-f12-2.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="f12-edge-cases"><span class="secnum">16.5.4</span> Edge cases</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Situation</th>
+<th>Expected</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">EC-12.1</td>
+<td>A player views another team&#39;s night</td>
+<td>Read-only; no action bar</td>
+</tr>
+<tr>
+<td class="nw">EC-12.2</td>
+<td>An admin views any night</td>
+<td><code>viewerCanManage: true</code>, <code>viewerSide: null</code>; the bar acts for whichever side is next</td>
+</tr>
+<tr>
+<td class="nw">EC-12.3</td>
+<td>Night submitted</td>
+<td>Captains: no &quot;Add paid member&quot;, no bar actions. Admins keep both</td>
+</tr>
+<tr>
+<td class="nw">EC-12.4</td>
+<td>Roster empty</td>
+<td><code>Users</code> icon · &quot;No players on this roster&quot; · &quot;A captain can add a paid member of this division.&quot;</td>
+</tr>
+</tbody></table></div>
+<h3 id="f12-acceptance-criteria"><span class="secnum">16.5.5</span> Acceptance criteria</h3>
+<ul>
+<li><strong>AC-12.1</strong> An empty night → <code>put-up, order 1, home</code>. Home picked → <code>put-up, order 1, away</code>. Both up → <code>result 1</code>. Match 1 complete → <code>put-up, order 2, away</code>. Five complete → <code>submit</code>. Submitted → <code>done</code>.</li>
+<li><strong>AC-12.2</strong> A player-role user sees no action bar.</li>
+</ul>
+<h3 id="f12-implementation-gaps-_parked"><span class="secnum">16.5.6</span> Implementation gaps (<code>_parked</code>)</h3>
+<ul>
+<li>The bar label is always &quot;Start match&quot;, even for result entry.</li>
+<li>&quot;Add paid member&quot; isn&#39;t hidden after submit.</li>
+<li><code>done</code> shows the home team&#39;s name instead of the submitter, and no time.</li>
+<li>The score strip shows when <code>status !== &#39;scheduled&#39;</code> instead of &quot;once a result exists&quot;.</li>
+<li>The ≥ 1024 px left rail (the week&#39;s fixtures) isn&#39;t built.</li>
+</ul>
+</section>
+
+<h2 id="f39a"><span class="secnum">16.6</span> F39a — Bye and No-Play weeks</h2>
+<section class="feature"><div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>Status</th>
+<th>Rules</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>2</td>
+<td><span class="badge b-target">Target</span></td>
+<td>R-004, R-142</td>
+</tr>
+</tbody></table></div>
+<h3 id="f39a-requirements"><span class="secnum">16.6.1</span> Requirements</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Requirement</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>FR-39a.1</td>
+<td>Add a <code>schedule_weeks</code> table (<code>division_id</code>, <code>week_no</code>, <code>play_date</code>, <code>kind REGULAR|NO_PLAY|PLAYOFF</code>)</td>
+</tr>
+<tr>
+<td>FR-39a.2</td>
+<td>Allow <code>team_matches.away_team_id NULL</code> meaning <strong>BYE</strong> for the home team; a CHECK keeps <code>status = &#39;bye&#39;</code> consistent</td>
+</tr>
+<tr>
+<td>FR-39a.3</td>
+<td>Schedule renders Bye and No-Play as neutral, <strong>non-clickable</strong> banners (&quot;Bye · 03207&quot;, &quot;No play · public holiday&quot;)</td>
+</tr>
+<tr>
+<td>FR-39a.4</td>
+<td>Standings: a bye counts as neither win nor loss (policy decision; default: no points)</td>
+</tr>
+<tr>
+<td>FR-39a.5</td>
+<td>An admin schedule generator: round-robin with automatic byes for odd team counts</td>
+</tr>
+</tbody></table></div>
+<h3 id="f39a-logic-round-robin-with-bye"><span class="secnum">16.6.2</span> Logic: round-robin with bye</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E03-schedule-night-f39a-1.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E03-schedule-night-f39a-1.svg" alt="Diagram: 16 - Schedule &amp; Night View" loading="lazy" data-diagram-file="features_E03-schedule-night-f39a-1.svg" width="288" height="819"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_E03-schedule-night-f39a-1.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="f39a-acceptance-criteria"><span class="secnum">16.6.3</span> Acceptance criteria</h3>
+<ul>
+<li><strong>AC-39a.1</strong> A 5-team division produces exactly one bye per round, and each team gets the same number of byes ± 1.</li>
+</ul>
+</section>
+
+</article>
+</main>
+<script src="../assets/site-data.js"></script>
+<script src="../assets/layout.js"></script>
+<script src="../assets/search-index.js"></script>
+<script src="../assets/site.js"></script>
+</body>
+</html>

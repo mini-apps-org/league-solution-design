@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MViP Solution Design</title>
+<link rel="stylesheet" href="assets/site.css">
+<script src="assets/boot.js"></script>
+</head>
+<body data-root="" data-page="index.html">
+<main id="main" class="content">
+<article class="doc home">
+<h1>MViP Billiard League — Solution Design</h1>
+
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Product</strong></td>
+<td>MViP (Mini Vietnamese Pool league): APA-style handicapped amateur pool league platform for Vietnam</td>
+</tr>
+<tr>
+<td><strong>Document type</strong></td>
+<td>Solution design (deep dive) for software engineers</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><strong>0.4.0, 2026-11-11</strong>: HTML site added (<a href="changelog.html">change log</a>). Aligned with the repos on 2026-11-10 (<code>league-be@444af15</code>, tag 0.2.10 · <code>league-fe@fc5bf84</code>, tag 0.1.4)</td>
+</tr>
+<tr>
+<td><strong>Repos</strong></td>
+<td><a href="https://github.com/mini-apps-org/league-be" target="_blank" rel="noopener"><code>mini-apps-org/league-be</code></a> (Go API) · <a href="https://github.com/mini-apps-org/league-fe" target="_blank" rel="noopener"><code>mini-apps-org/league-fe</code></a> (React SPA)</td>
+</tr>
+<tr>
+<td><strong>Frontend</strong></td>
+<td>Vite 8 + React 19 + TypeScript 6, Tailwind 4, shadcn (<code>radix-nova</code>), TanStack Query 5, react-router 7, axios, i18next → <strong>Vercel</strong> (GitHub Actions, on tag) at <code>www.mvip-league.com</code></td>
+</tr>
+<tr>
+<td><strong>Backend</strong></td>
+<td>Go 1.26, <code>net/http</code> + gorilla/mux, pgx raw SQL, Google OIDC + cookie sessions, PostgreSQL (rules in triggers/functions) → image in <strong>Artifact Registry</strong>, <strong>GKE</strong> on GCP (<code>asia-southeast1</code>) at <code>be.mvip-league.com</code></td>
+</tr>
+<tr>
+<td><strong>Edge</strong></td>
+<td>Cloudflare DNS for <code>mvip-league.com</code></td>
+</tr>
+</tbody></table></div>
+<blockquote class="callout-warn"><p> <strong>Read first:</strong> the league API and the business-rules migration that the FE plans mark as done are <strong>missing from league-be</strong>. See <a href="15-as-built-vs-target.html">27 — As-built vs target</a>.</p>
+</blockquote>
+<h2 id="overview-and-design">Overview and design</h2><div class="cards"><a class="card" href="01-business-context.html"><span class="card-num">Chapter 01</span><span class="card-title">Business Context</span><span class="card-desc">Why the product exists, actors, revenue, risks</span></a><a class="card" href="02-glossary.html"><span class="card-num">Chapter 02</span><span class="card-title">Glossary</span><span class="card-desc">Billiard and league terms (EN / VI / repo identifier)</span></a><a class="card" href="03-scope-and-phases.html"><span class="card-num">Chapter 03</span><span class="card-title">Scope and Delivery Phases</span><span class="card-desc">Phase 1 = the repo MVP (with build status), Phases 2–3, user stories, next steps</span></a><a class="card" href="04-domain-rules.html"><span class="card-num">Chapter 04</span><span class="card-title">Domain Rules Specification</span><span class="card-desc">All business rules with IDs, plus <strong>where each one is implemented</strong></span></a><a class="card" href="05-architecture.html"><span class="card-num">Chapter 05</span><span class="card-title">Solution Architecture</span><span class="card-desc">Stack, C4 diagrams, cookie topology, request lifecycle, ADRs from the repos</span></a><a class="card" href="06-data-model.html"><span class="card-num">Chapter 06</span><span class="card-title">Data Model (PostgreSQL)</span><span class="card-desc">As-built schema (<code>00001</code>), planned rules (<code>00002</code>), target additions</span></a><a class="card" href="07-api-design.html"><span class="card-num">Chapter 07</span><span class="card-title">API Design</span><span class="card-desc">Envelopes, error-code registry, built and planned endpoints, examples</span></a><a class="card" href="08-scorekeeping-engine.html"><span class="card-num">Chapter 08</span><span class="card-title">Scorekeeping Engine</span><span class="card-desc">MVP result-entry flow; Phase 2 live-scoring engine</span></a><a class="card" href="09-frontend-design.html"><span class="card-num">Chapter 09</span><span class="card-title">Frontend Design (league-fe)</span><span class="card-desc"><code>league-fe</code> stack, <code>src/</code> tree, conventions, routes and screen status, auth client, PWA</span></a><a class="card" href="10-backend-design.html"><span class="card-num">Chapter 10</span><span class="card-title">Backend Design (league-be)</span><span class="card-desc"><code>league-be</code> layout, repository rules, config, planned <code>internal/league</code></span></a><a class="card" href="11-security-and-roles.html"><span class="card-num">Chapter 11</span><span class="card-title">Security, Roles and Compliance</span><span class="card-desc">Google OIDC + sessions + CSRF, cookies, RBAC, gaps, PDPD</span></a><a class="card" href="12-infra-devops.html"><span class="card-num">Chapter 12</span><span class="card-title">Infrastructure and DevOps</span><span class="card-desc">Real CI/CD pipelines, target GKE runtime, observability, cost</span></a><a class="card" href="13-nfr-and-testing.html"><span class="card-num">Chapter 13</span><span class="card-title">Non-Functional Requirements and Test Strategy</span><span class="card-desc">Targets, SQL-first rule tests, integration gate, DoD</span></a></div>
+<h2 id="feature-specs">Feature specs</h2><p>54 features in 12 epics, one chapter per epic. Each chapter starts with the epic overview and per-phase deep dive, then one section per feature with requirements, logic, flow, edge cases and acceptance criteria. <a href="features/index.html">See all features in one table</a>.</p>
+<div class="cards"><a class="card" href="features/E01-identity-access.html"><span class="card-num">Chapter 14 · E01 · Phase 1, 2 · 7 features</span><span class="card-title">Identity &amp; Access</span><span class="card-desc">Every person signs in with one identity, is linked to their league membership, and can only do what their role allows</span></a><a class="card" href="features/E02-league-foundation.html"><span class="card-num">Chapter 15 · E02 · Phase 1, 2 · 6 features</span><span class="card-title">League Data Foundation</span><span class="card-desc">The league's data, rules and API exist in league-be, so every screen has something real to call</span></a><a class="card" href="features/E03-schedule-night.html"><span class="card-num">Chapter 16 · E03 · Phase 1, 2 · 3 features</span><span class="card-title">Schedule &amp; Night View</span><span class="card-desc">Anyone can find a fixture and see the state of a night. Captains see what to do next</span></a><a class="card" href="features/E04-night-operations.html"><span class="card-num">Chapter 17 · E04 · Phase 1, 2 · 4 features</span><span class="card-title">Night Operations: Put-up, Result, Submit</span><span class="card-desc">A captain runs all 5 matches of a night on a phone: put up players within the 23 cap, enter each result, submit</span></a><a class="card" href="features/E05-roster-admin.html"><span class="card-num">Chapter 18 · E05 · Phase 1, 2 · 6 features</span><span class="card-title">Roster &amp; Player Admin</span><span class="card-desc">Captains keep rosters filled with paid members. Admins find players, change skill levels with a reason, and move players between teams, all traceable</span></a><a class="card" href="features/E06-platform-delivery.html"><span class="card-num">Chapter 19 · E06 · Phase 1, 2 · 10 features</span><span class="card-title">Platform &amp; Delivery</span><span class="card-desc">The app installs like a native app, works in English and Vietnamese, ships safely on a tag, and is observable and tested end to end</span></a><a class="card" href="features/E07-live-scoring.html"><span class="card-num">Chapter 20 · E07 · Phase 2 · 5 features</span><span class="card-title">Live Scoring</span><span class="card-desc">Replace &quot;type the final score&quot; with shot-by-shot scoring on one phone per table: coin flip, lag, every turn, every rack, accolades. It works offline, and everyone else watches live</span></a><a class="card" href="features/E08-verification-disputes.html"><span class="card-num">Chapter 21 · E08 · Phase 2 · 1 feature</span><span class="card-title">Score Verification &amp; Disputes</span><span class="card-desc">Both teams agree on the night's record before it counts. Agreement earns a standings bonus; disagreement becomes a dispute that an admin resolves with an audit trail</span></a><a class="card" href="features/E09-nine-ball-handicap.html"><span class="card-num">Chapter 22 · E09 · Phase 2 · 2 features</span><span class="card-title">9-Ball &amp; Handicap</span><span class="card-desc">Run 9-Ball divisions with point-based scoring and the 20-point split, and keep every player's skill level honest with data-driven suggestions</span></a><a class="card" href="features/E10-insights.html"><span class="card-num">Chapter 23 · E10 · Phase 2 · 2 features</span><span class="card-title">Profile &amp; Standings</span><span class="card-desc">Players see their own record and achievements; everyone, signed in or not, sees division standings and results</span></a><a class="card" href="features/E11-payments-notifications.html"><span class="card-num">Chapter 24 · E11 · Phase 2 · 2 features</span><span class="card-title">Payments &amp; Notifications</span><span class="card-desc">Collect membership and weekly fees through the wallets Vietnamese players already use, and reach players where they already are (Zalo)</span></a><a class="card" href="features/E12-growth.html"><span class="card-num">Chapter 25 · E12 · Phase 3 · 8 features</span><span class="card-title">Growth</span><span class="card-desc">Grow from one league to many: more formats and divisions, tournaments, venue and sponsor value, and protection of the handicap system</span></a></div>
+<h2 id="status">Status</h2><div class="cards"><a class="card" href="14-open-questions.html"><span class="card-num">Chapter 26</span><span class="card-title">Open Questions and Source-Document Defects</span><span class="card-desc">Notion defects, missing business rules, repo questions and defects</span></a><a class="card" href="15-as-built-vs-target.html"><span class="card-num">Chapter 27</span><span class="card-title">As-Built vs Target (Gap Analysis)</span><span class="card-desc">Gap matrix with priorities; what changed from design v0.1</span></a><a class="card" href="appendix-rule-tables.html"><span class="card-num">Appendix A</span><span class="card-title">Machine-Readable Rule Tables</span><span class="card-desc">Machine-readable race / points / matrix tables and where the live copies are</span></a><a class="card" href="changelog.html"><span class="card-num">Version v0.4.0</span><span class="card-title">Change Log</span><span class="card-desc">What changed in each version of this solution design</span></a></div>
+<p><strong>Suggested reading order:</strong></p>
+<ul>
+<li>New engineers: 15 → 02 → 04 → 06 → 07 → your side (09 or 10).</li>
+<li>Product owners: 03 → 14.</li>
+</ul>
+<h2 id="conventions">Conventions</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Mark</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>R-xxx</code></td>
+<td>Business rule ID (chapter 04). Use it in tests, tickets and PRs</td>
+</tr>
+<tr>
+<td><span class="badge b-built">Built</span></td>
+<td>As-built: in a repo on <code>master</code></td>
+</tr>
+<tr>
+<td><span class="badge b-parked">Parked</span></td>
+<td>Built but parked in <code>league-fe/_parked/</code> (not compiled)</td>
+</tr>
+<tr>
+<td><span class="badge b-planned">Planned</span></td>
+<td>Planned MVP: specified in <code>league-fe/plans/20261104-2126-bida-league-mvp/</code>, code not in the repo</td>
+</tr>
+<tr>
+<td><span class="badge b-target">Target</span></td>
+<td>Target: later phase of this design</td>
+</tr>
+<tr>
+<td><span class="badge b-yes">Yes</span>/ <span class="badge b-assumption">Assumption</span> / <span class="badge b-corrected">Corrected</span></td>
+<td>Confirmed by the Notion source / assumption pending confirmation / corrected source defect</td>
+</tr>
+</tbody></table></div>
+<p>Diagrams are Mermaid. JSON examples are valid JSON with <code>&lt;placeholder&gt;</code> values.</p>
+<h2 id="source-traceability">Source traceability</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Notion source page</th>
+<th>Covered in</th>
+<th>Implemented in (repo)</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Introduce to business (first try)</td>
+<td>01, 03</td>
+<td>—</td>
+</tr>
+<tr>
+<td>Foundation Database of players</td>
+<td>04 §5.3, §13 · 06 · 09</td>
+<td><code>00001_init.sql</code> (team/individual matches, stats); <span class="badge b-parked">Parked</span> Schedule/Match pages</td>
+</tr>
+<tr>
+<td>How to score (on paper manually)</td>
+<td>04 §6–§7 · 13</td>
+<td>MVP result entry (games, innings, DS totals)</td>
+</tr>
+<tr>
+<td>Score keeper</td>
+<td>04 §5–§9 · 08 · Appendix</td>
+<td><code>race_chart</code>; <span class="badge b-planned">Planned</span><code>fn_score_individual_match</code></td>
+</tr>
+<tr>
+<td>Player profile</td>
+<td>04 §12 · 09 (Phase 2)</td>
+<td><code>players_stats</code>; <span class="badge b-planned">Planned</span><code>player_division_stats</code></td>
+</tr>
+<tr>
+<td>DEMO (SRS MVP)</td>
+<td>03 · 04 · 08 · 09 · 11</td>
+<td><span class="badge b-parked">Parked</span> put-up, result, admin players; <span class="badge b-planned">Planned</span><code>change_skill_level</code></td>
+</tr>
+<tr>
+<td>Division Difference</td>
+<td>04 §2–§3 · 06</td>
+<td><code>divisions.format</code>, <code>skill_level_cap</code>; <span class="badge b-planned">Planned</span><code>team_rosters</code></td>
+</tr>
+<tr>
+<td>ID Generation Rules</td>
+<td>04 §11 · 26 Q2/Q3/Q33</td>
+<td><code>players.member_id</code>, <code>teams.team_number</code> (free text today)</td>
+</tr>
+<tr>
+<td>Dictionary</td>
+<td>02</td>
+<td>FE i18n keys</td>
+</tr>
+</tbody></table></div>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Repo source</th>
+<th>Covered in</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>league-be/internal/auth/*</code>, <code>platform/middleware/*</code></td>
+<td>05, 07, 10, 11</td>
+</tr>
+<tr>
+<td><code>league-be/db/migrations/00001_init.sql</code>, <code>seeds/*</code></td>
+<td>06, 15</td>
+</tr>
+<tr>
+<td><code>league-be/.github/workflows/*</code>, <code>Dockerfile</code>, <code>Makefile</code></td>
+<td>12</td>
+</tr>
+<tr>
+<td><code>league-fe/src/*</code>, <code>CLAUDE.md</code>, <code>.claude/rules/*</code></td>
+<td>09</td>
+</tr>
+<tr>
+<td><code>league-fe/_parked/*</code>, <code>plans/*</code></td>
+<td>03, 04, 06, 07, 08, 15</td>
+</tr>
+<tr>
+<td><code>league-fe/.github/workflows/*</code>, <code>vercel.json</code></td>
+<td>12</td>
+</tr>
+</tbody></table></div>
+<h2 id="next-steps">Next steps</h2>
+<ol>
+<li><strong>P0:</strong> restore or rebuild the league-be league module and the <code>00002</code> rules migration (<a href="15-as-built-vs-target.html">27</a>).</li>
+<li>Un-park the FE screens, generate the API types, and run FE + BE together in a browser.</li>
+<li>Deploy the API to GKE (manifests + deploy job), publish the Google consent screen, and create a separate staging environment.</li>
+<li>Answer the open questions that affect the beta: Q29–Q34 (<a href="14-open-questions.html">26</a>).</li>
+<li>Beta with one division; then Phase 2 (live scoring, verification, 9-Ball, payments, Zalo).</li>
+</ol>
+
+</article>
+</main>
+<script src="assets/site-data.js"></script>
+<script src="assets/layout.js"></script>
+<script src="assets/search-index.js"></script>
+<script src="assets/site.js"></script>
+</body>
+</html>

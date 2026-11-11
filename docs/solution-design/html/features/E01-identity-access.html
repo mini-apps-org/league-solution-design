@@ -1,0 +1,928 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>14 - Identity &amp; Access · MViP Solution Design</title>
+<link rel="stylesheet" href="../assets/site.css">
+<script src="../assets/boot.js"></script>
+</head>
+<body data-root="../" data-page="features/E01-identity-access.html">
+<main id="main" class="content">
+<article class="doc">
+<h1>14 - Identity &amp; Access</h1>
+<p class="lede">Epic E01 · 7 features</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Goal</strong></td>
+<td>Every person signs in with one identity, is linked to their league membership, and can only do what their role allows</td>
+</tr>
+<tr>
+<td><strong>Phase</strong></td>
+<td>1 (F1–F6) · 2 (F37)</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><span class="badge b-built">Built</span> Google sign-in, sessions, CSRF · <span class="badge b-missing">Missing</span><code>/me</code> role + <code>playerId</code>, member-link API, role enforcement</td>
+</tr>
+<tr>
+<td><strong>Actors</strong></td>
+<td>Player, Captain, Admin, Google</td>
+</tr>
+<tr>
+<td><strong>Related</strong></td>
+<td><a href="../05-architecture.html">05 §3 cookie topology</a> · <a href="../07-api-design.html">07 error codes</a> · <a href="../11-security-and-roles.html">11 security</a></td>
+</tr>
+</tbody></table></div>
+<h2 id="features-by-phase"><span class="secnum">14.1</span> Features by phase</h2>
+<h3 id="phase-1"><span class="secnum">14.1.1</span> Phase 1</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>Feature</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">F1</td>
+<td><a href="E01-identity-access.html#f01">Google sign-in</a></td>
+<td><span class="badge b-built">Built</span></td>
+</tr>
+<tr>
+<td class="nw">F2</td>
+<td><a href="E01-identity-access.html#f02">Sessions &amp; logout</a></td>
+<td><span class="badge b-built">Built</span></td>
+</tr>
+<tr>
+<td class="nw">F3</td>
+<td><a href="E01-identity-access.html#f03">CSRF protection</a></td>
+<td><span class="badge b-built">Built</span></td>
+</tr>
+<tr>
+<td class="nw">F4</td>
+<td><a href="E01-identity-access.html#f04"><code>/me</code> with role + playerId</a></td>
+<td><span class="badge b-built">Built</span>/ <span class="badge b-missing">Missing</span></td>
+</tr>
+<tr>
+<td class="nw">F5</td>
+<td><a href="E01-identity-access.html#f05">Onboarding: link member ID</a></td>
+<td><span class="badge b-built">Built</span> UI / <span class="badge b-missing">Missing</span> API</td>
+</tr>
+<tr>
+<td class="nw">F6</td>
+<td><a href="E01-identity-access.html#f06">Role checks + captain-owns-night</a></td>
+<td><span class="badge b-missing">Missing</span></td>
+</tr>
+</tbody></table></div>
+<h3 id="phase-2"><span class="secnum">14.1.2</span> Phase 2</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>Feature</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">F37</td>
+<td><a href="E01-identity-access.html#f37">Zalo login &amp; Mini App</a></td>
+<td><span class="badge b-target">Target</span></td>
+</tr>
+</tbody></table></div>
+<h2 id="phase-1-deep-dive"><span class="secnum">14.2</span> Phase 1 deep dive</h2>
+<h3 id="components"><span class="secnum">14.2.1</span> Components</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E01-identity-access-1.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E01-identity-access-1.svg" alt="Diagram: 14 - Identity &amp; Access" loading="lazy" data-diagram-file="features_E01-identity-access-1.svg" width="1853" height="582"></a><figcaption><span>Red = specified in plan-3 but not in league-be. Everything else is built.</span><a class="full" href="../assets/diagrams/features_E01-identity-access-1.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="main-flow-first-sign-in-to-a-linked-account"><span class="secnum">14.2.2</span> Main flow: first sign-in to a linked account</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E01-identity-access-2.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E01-identity-access-2.svg" alt="Diagram: 14 - Identity &amp; Access" loading="lazy" data-diagram-file="features_E01-identity-access-2.svg" width="1541" height="1037"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_E01-identity-access-2.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="api-surface"><span class="secnum">14.2.3</span> API surface</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Endpoint</th>
+<th>Feature</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>GET /auth/google/login</code></td>
+<td class="nw">F1</td>
+<td><span class="badge b-built">Built</span></td>
+</tr>
+<tr>
+<td><code>GET /auth/google/callback</code></td>
+<td class="nw">F1</td>
+<td><span class="badge b-built">Built</span></td>
+</tr>
+<tr>
+<td><code>POST /auth/logout</code></td>
+<td class="nw">F2</td>
+<td><span class="badge b-built">Built</span></td>
+</tr>
+<tr>
+<td><code>GET /me</code></td>
+<td>F2, F4</td>
+<td><span class="badge b-built">Built</span> basic · <span class="badge b-missing">Missing</span><code>role</code>, <code>playerId</code></td>
+</tr>
+<tr>
+<td><code>GET /members/preview?member_id=</code></td>
+<td class="nw">F5</td>
+<td><span class="badge b-missing">Missing</span></td>
+</tr>
+<tr>
+<td><code>POST /me/link</code></td>
+<td class="nw">F5</td>
+<td><span class="badge b-missing">Missing</span></td>
+</tr>
+</tbody></table></div>
+<h2 id="phase-2-deep-dive"><span class="secnum">14.3</span> Phase 2 deep dive</h2>
+<p><strong>Scope:</strong> <a href="E01-identity-access.html#f37">F37 Zalo login &amp; Mini App</a>. Most Vietnamese players live in Zalo, so Phase 2 adds Zalo as a second identity provider and runs the app inside a Zalo Mini App. Sessions, CSRF, RBAC and the member link from Phase 1 stay the same. Only the <em>front door</em> changes.</p>
+<h3 id="components-what-phase-2-adds"><span class="secnum">14.3.1</span> Components: what Phase 2 adds</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E01-identity-access-3.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E01-identity-access-3.svg" alt="Diagram: 14 - Identity &amp; Access" loading="lazy" data-diagram-file="features_E01-identity-access-3.svg" width="1432" height="492"></a><figcaption><span>Everything is dashed (Phase 2). Both Zalo paths end in the same identity service, which creates the usual <code>__Host-sid</code> session.</span><a class="full" href="../assets/diagrams/features_E01-identity-access-3.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="key-flow-one-person-two-providers"><span class="secnum">14.3.2</span> Key flow: one person, two providers</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E01-identity-access-4.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E01-identity-access-4.svg" alt="Diagram: 14 - Identity &amp; Access" loading="lazy" data-diagram-file="features_E01-identity-access-4.svg" width="1176" height="923"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_E01-identity-access-4.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="data-delta"><span class="secnum">14.3.3</span> Data delta</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Change</th>
+<th>Why</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>New <code>user_identities (user_id, provider, subject, created_at)</code>, <code>UNIQUE (provider, subject)</code></td>
+<td>One user, many providers. Google moves here from <code>users.google_sub</code></td>
+</tr>
+<tr>
+<td><code>users.email</code> becomes nullable</td>
+<td>Zalo doesn&#39;t always return an email</td>
+</tr>
+<tr>
+<td><code>GET /me</code> adds <code>identities: [&quot;google&quot;,&quot;zalo&quot;]</code></td>
+<td>The Linked accounts screen</td>
+</tr>
+<tr>
+<td>Errors <code>40008</code> identity already linked to another user, <code>40009</code> cannot unlink the last identity</td>
+<td>Safe linking and unlinking</td>
+</tr>
+</tbody></table></div>
+
+<h2 id="f01"><span class="secnum">14.4</span> F1 — Google sign-in</h2>
+<section class="feature"><div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>Status</th>
+<th>Rules</th>
+<th>Repo refs</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1</td>
+<td><span class="badge b-built">Built</span></td>
+<td>ADR-003, ADR-009</td>
+<td><code>league-be/internal/auth/{handlers,services,services_google,login_transaction}.go</code> · <code>league-fe/src/pages/auth/LoginPage.tsx</code>, <code>src/components/auth/GoogleSignInButton.tsx</code>, <code>src/hooks/useLoginError.ts</code></td>
+</tr>
+</tbody></table></div>
+<h3 id="f01-requirements"><span class="secnum">14.4.1</span> Requirements</h3>
+<p><em>As a player, I sign in with my Google account so I don&#39;t need a league password.</em></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Requirement</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">FR-1.1</td>
+<td>The sign-in control is an <code>&lt;a href&gt;</code> to <code>{VITE_API_URL}/api/v1/auth/google/login</code> with no query params. It is never an XHR, because the browser must follow the 302 and show Google&#39;s origin in the address bar</td>
+</tr>
+<tr>
+<td class="nw">FR-1.2</td>
+<td>The backend uses Authorization Code + PKCE (S256) + <code>state</code> + <code>nonce</code>, scopes <code>openid email profile</code></td>
+</tr>
+<tr>
+<td class="nw">FR-1.3</td>
+<td>State, nonce and verifier are sealed with AES-256-GCM in the <code>oauth_tx</code> cookie (10 min, path <code>/api/v1/auth/google</code>), and the cookie is cleared as soon as the callback reads it</td>
+</tr>
+<tr>
+<td class="nw">FR-1.4</td>
+<td>The callback accepts only a verified <code>id_token</code> (signature, iss, aud, exp), a matching nonce, a non-empty <code>sub</code> and <code>email_verified = true</code></td>
+</tr>
+<tr>
+<td class="nw">FR-1.5</td>
+<td>Users are upserted by <code>google_sub</code> only, never by email</td>
+</tr>
+<tr>
+<td class="nw">FR-1.6</td>
+<td>A new user is redirected to <code>/onboarding</code>; a returning user to <code>/</code></td>
+</tr>
+<tr>
+<td class="nw">FR-1.7</td>
+<td>Failures redirect to <code>/login?error=cancelled|login_failed|server_error</code>. The FE shows a banner only for these three values</td>
+</tr>
+<tr>
+<td class="nw">FR-1.8</td>
+<td>A signed-in user who opens <code>/login</code> is redirected to <code>/</code></td>
+</tr>
+<tr>
+<td class="nw">FR-1.9</td>
+<td>After the click the button shows a spinner and is disabled, without <code>preventDefault</code></td>
+</tr>
+</tbody></table></div>
+<h3 id="f01-rules--logic"><span class="secnum">14.4.2</span> Rules &amp; logic</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E01-identity-access-f01-1.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E01-identity-access-f01-1.svg" alt="Diagram: 14 - Identity &amp; Access" loading="lazy" data-diagram-file="features_E01-identity-access-f01-1.svg" width="873" height="1784"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_E01-identity-access-f01-1.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="f01-ui"><span class="secnum">14.4.3</span> UI</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Element</th>
+<th>Spec</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Mobile</td>
+<td>88 px app mark &quot;8&quot;, &quot;Billiard League&quot;, tagline, Google button pinned near the bottom (56 px, radius 14), legal line</td>
+</tr>
+<tr>
+<td>≥ 1024 px</td>
+<td>Two columns: brand panel (headline + 3 check points + &quot;Fall 2026 · 8-Ball Open&quot;) and a 400 px &quot;Sign in&quot; card</td>
+</tr>
+<tr>
+<td>Google mark</td>
+<td>Official four-colour G, 20 px. The only exception to the colour palette</td>
+</tr>
+<tr>
+<td>Error banner</td>
+<td><code>loginError.cancelled</code> &quot;You cancelled the sign-in.&quot; · <code>login_failed</code> &quot;Sign-in did not complete. Please try again.&quot; · <code>server_error</code> &quot;Something went wrong on our side. Please try again.&quot;</td>
+</tr>
+<tr>
+<td>Legal line</td>
+<td>One key with <code>&lt;rules&gt;</code> and <code>&lt;privacy&gt;</code> placeholders rendered via <code>&lt;Trans&gt;</code>. Links go to the public <code>/rules</code> and <code>/privacy</code> pages</td>
+</tr>
+</tbody></table></div>
+<h3 id="f01-edge-cases"><span class="secnum">14.4.4</span> Edge cases</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Situation</th>
+<th>Expected</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">EC-1.1</td>
+<td><code>?error=teapot</code> or any other unknown value</td>
+<td>No banner</td>
+</tr>
+<tr>
+<td class="nw">EC-1.2</td>
+<td>User replays an old callback URL</td>
+<td><code>oauth_tx</code> is already cleared → <code>login_failed</code></td>
+</tr>
+<tr>
+<td class="nw">EC-1.3</td>
+<td>Google account with an unverified email</td>
+<td><code>login_failed</code></td>
+</tr>
+<tr>
+<td class="nw">EC-1.4</td>
+<td>Same Google account changes its email</td>
+<td>Same user row (matched by <code>sub</code>), email updated</td>
+</tr>
+<tr>
+<td class="nw">EC-1.5</td>
+<td>Login takes more than 10 min on Google&#39;s page</td>
+<td>The transaction expires → <code>login_failed</code></td>
+</tr>
+<tr>
+<td class="nw">EC-1.6</td>
+<td>Consent screen still in Testing mode</td>
+<td>Non-test users are refused by Google (F23)</td>
+</tr>
+</tbody></table></div>
+<h3 id="f01-acceptance-criteria"><span class="secnum">14.4.5</span> Acceptance criteria</h3>
+<ul>
+<li><strong>AC-1.1</strong> Given a new Google account, when sign-in completes, then cookies <code>sid</code> and <code>csrf</code> are set and the browser lands on <code>/onboarding</code>.</li>
+<li><strong>AC-1.2</strong> Given <code>/login?error=cancelled</code>, then the banner reads &quot;You cancelled the sign-in.&quot;</li>
+<li><strong>AC-1.3</strong> Given a signed-in user, when they open <code>/login</code>, then they are redirected to <code>/</code>.</li>
+<li><strong>AC-1.4</strong> After sign-in, <code>localStorage</code> contains no token (only <code>locale</code>).</li>
+</ul>
+<h3 id="f01-implementation-gaps"><span class="secnum">14.4.6</span> Implementation gaps</h3>
+<ul>
+<li>The deep link back to the page the user wanted (<code>next</code> path in sessionStorage, 24 validation tests) is marked done in login plan-3, but it isn&#39;t in <code>src/</code>. A stale comment in <code>src/router/index.tsx</code> still refers to it. Rebuild it or drop it from scope.</li>
+<li>The <code>ui-spec.md</code> error wording differs from <code>en.json</code>. Pick one.</li>
+<li>The league-be auth README describes a <code>hd</code> (Workspace domain) check and a <code>return_to</code> parameter, neither of which exists.</li>
+</ul>
+</section>
+
+<h2 id="f02"><span class="secnum">14.5</span> F2 — Sessions &amp; logout</h2>
+<section class="feature"><div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>Status</th>
+<th>Rules</th>
+<th>Repo refs</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1</td>
+<td><span class="badge b-built">Built</span></td>
+<td class="nw">ADR-003</td>
+<td><code>league-be/internal/auth/{middleware,cleanup,handlers_cookie,repositories}.go</code> · <code>league-fe/src/components/RequireAuth.tsx</code>, <code>src/hooks/useMe.ts</code></td>
+</tr>
+</tbody></table></div>
+<h3 id="f02-requirements"><span class="secnum">14.5.1</span> Requirements</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Requirement</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">FR-2.1</td>
+<td>A session is an opaque 32-byte id (base64url) stored in <code>sessions</code>. There is no JWT and no refresh token</td>
+</tr>
+<tr>
+<td class="nw">FR-2.2</td>
+<td>Absolute lifetime <code>SESSION_TTL</code> (12 h) and idle lifetime <code>SESSION_IDLE_TTL</code> (30 min), both enforced in SQL. Startup fails if idle &gt; absolute</td>
+</tr>
+<tr>
+<td class="nw">FR-2.3</td>
+<td>Every authenticated request updates <code>last_seen_at</code></td>
+</tr>
+<tr>
+<td class="nw">FR-2.4</td>
+<td>A new session id is issued on every login (prevents session fixation)</td>
+</tr>
+<tr>
+<td class="nw">FR-2.5</td>
+<td>Expired sessions are deleted at startup and then every 24 h</td>
+</tr>
+<tr>
+<td class="nw">FR-2.6</td>
+<td><code>POST /auth/logout</code> (CSRF required) deletes the session and clears <code>sid</code> and <code>csrf</code>. It returns 204 even with no session</td>
+</tr>
+<tr>
+<td class="nw">FR-2.7</td>
+<td>FE <code>RequireAuth</code>: <code>GET /me</code> with <code>retry: false</code>. Pending → <code>AppSkeleton</code>; error → <code>/login</code> with <code>state.from</code></td>
+</tr>
+<tr>
+<td class="nw">FR-2.8</td>
+<td>Any 401 outside <code>/me</code> hard-redirects to <code>/login</code>, because there is no refresh</td>
+</tr>
+<tr>
+<td class="nw">FR-2.9</td>
+<td>FE logout clears the React Query cache before navigating to <code>/login</code></td>
+</tr>
+</tbody></table></div>
+<h3 id="f02-rules--logic"><span class="secnum">14.5.2</span> Rules &amp; logic</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E01-identity-access-f02-1.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E01-identity-access-f02-1.svg" alt="Diagram: 14 - Identity &amp; Access" loading="lazy" data-diagram-file="features_E01-identity-access-f02-1.svg" width="946" height="267"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_E01-identity-access-f02-1.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Cookie (prod)</th>
+<th>HttpOnly</th>
+<th>Domain</th>
+<th>Path</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>__Host-sid</code></td>
+<td>yes</td>
+<td>host-only <code>be.</code></td>
+<td><code>/</code></td>
+<td>Session</td>
+</tr>
+<tr>
+<td><code>__Secure-csrf</code></td>
+<td>no</td>
+<td><code>mvip-league.com</code></td>
+<td><code>/</code></td>
+<td>Double-submit token, readable by the SPA on <code>www.</code></td>
+</tr>
+<tr>
+<td><code>__Secure-oauth_tx</code></td>
+<td>yes</td>
+<td>host-only</td>
+<td><code>/api/v1/auth/google</code></td>
+<td>Login transaction</td>
+</tr>
+</tbody></table></div>
+<p>In development and staging the cookies use plain names (<code>sid</code>, <code>csrf</code>, <code>oauth_tx</code>), without Secure and without Domain.</p>
+<h3 id="f02-edge-cases"><span class="secnum">14.5.3</span> Edge cases</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Situation</th>
+<th>Expected</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">EC-2.1</td>
+<td>Captain idles for 35 min mid-night, then taps save</td>
+<td>401 <code>40102</code> → <code>/login</code>; unsaved form input is lost. Recommendation: show a &quot;session expired&quot; toast first</td>
+</tr>
+<tr>
+<td class="nw">EC-2.2</td>
+<td>The night runs longer than 12 h</td>
+<td>Re-login is required. Acceptable, since nights are about 4 h</td>
+</tr>
+<tr>
+<td class="nw">EC-2.3</td>
+<td>Logout without a cookie</td>
+<td>204, nothing deleted</td>
+</tr>
+<tr>
+<td class="nw">EC-2.4</td>
+<td>Two tabs open; one logs out</td>
+<td>The other gets a 401 on its next request → <code>/login</code></td>
+</tr>
+</tbody></table></div>
+<h3 id="f02-acceptance-criteria"><span class="secnum">14.5.4</span> Acceptance criteria</h3>
+<ul>
+<li><strong>AC-2.1</strong> Given a session idle for 31 minutes, when <code>/me</code> is called, then the response is 401 with code <code>40102</code> and the <code>sid</code> cookie is cleared.</li>
+<li><strong>AC-2.2</strong> When the user logs out, then <code>POST /auth/logout</code> sends <code>X-CSRF-Token</code>, returns 204 and the app shows <code>/login</code>.</li>
+</ul>
+<h3 id="f02-implementation-gaps"><span class="secnum">14.5.5</span> Implementation gaps</h3>
+<ul>
+<li><code>DeleteUserSessions</code> (&quot;log out everywhere&quot;) exists in the repository layer but no route uses it.</li>
+<li>No FE warning before idle expiry. Consider a 25-minute warning on scoring screens.</li>
+</ul>
+</section>
+
+<h2 id="f03"><span class="secnum">14.6</span> F3 — CSRF protection</h2>
+<section class="feature"><div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>Status</th>
+<th>Rules</th>
+<th>Repo refs</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1</td>
+<td><span class="badge b-built">Built</span></td>
+<td class="nw">ADR-003</td>
+<td><code>league-be/internal/platform/middleware/csrf.go</code> · <code>league-fe/src/lib/csrf.ts</code>, <code>src/api/axios.ts</code></td>
+</tr>
+</tbody></table></div>
+<h3 id="f03-requirements"><span class="secnum">14.6.1</span> Requirements</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Requirement</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">FR-3.1</td>
+<td>Double-submit: every non-GET/HEAD/OPTIONS/TRACE request under <code>/api/v1</code> must send header <code>X-CSRF-Token</code> equal to the <code>csrf</code> cookie (constant-time compare)</td>
+</tr>
+<tr>
+<td class="nw">FR-3.2</td>
+<td>A missing cookie returns <code>40301</code>; a mismatch returns <code>40302</code></td>
+</tr>
+<tr>
+<td class="nw">FR-3.3</td>
+<td>The FE reads <code>__Secure-csrf</code> first and falls back to <code>csrf</code></td>
+</tr>
+<tr>
+<td class="nw">FR-3.4</td>
+<td>GETs carry no custom headers, so they stay CORS-simple (no preflight)</td>
+</tr>
+</tbody></table></div>
+<h3 id="f03-flow"><span class="secnum">14.6.2</span> Flow</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E01-identity-access-f03-1.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E01-identity-access-f03-1.svg" alt="Diagram: 14 - Identity &amp; Access" loading="lazy" data-diagram-file="features_E01-identity-access-f03-1.svg" width="992" height="730"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_E01-identity-access-f03-1.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="f03-acceptance-criteria"><span class="secnum">14.6.3</span> Acceptance criteria</h3>
+<ul>
+<li><strong>AC-3.1</strong> A POST with no <code>X-CSRF-Token</code> returns 403 <code>40302</code>, or <code>40301</code> if the cookie is absent.</li>
+<li><strong>AC-3.2</strong> In a browser, <code>GET /api/v1/me</code> from <code>www.</code> shows no preflight in the Network tab.</li>
+</ul>
+<h3 id="f03-implementation-gaps"><span class="secnum">14.6.4</span> Implementation gaps</h3>
+<ul>
+<li>The FE <code>CLAUDE.md</code> and README name the cookie <code>__Host-csrf</code>, but the code (correctly) uses <code>__Secure-csrf</code>. Fix the docs (<a href="../14-open-questions.html">Q35</a>).</li>
+</ul>
+</section>
+
+<h2 id="f04"><span class="secnum">14.7</span> F4 — `/me` with role and playerId</h2>
+<section class="feature"><div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>Status</th>
+<th>Rules</th>
+<th>Repo refs</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1</td>
+<td><span class="badge b-built">Built</span> basic · <span class="badge b-missing">Missing</span><code>role</code>, <code>playerId</code></td>
+<td class="nw">ADR-006</td>
+<td><code>league-be/internal/auth/handlers.go</code> (<code>Me</code>) · <code>league-fe/src/types/auth.ts</code> (<code>roleOf</code>, <code>needsMemberLink</code>), <code>src/hooks/useRole.ts</code></td>
+</tr>
+</tbody></table></div>
+<h3 id="f04-requirements"><span class="secnum">14.7.1</span> Requirements</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Requirement</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">FR-4.1</td>
+<td><code>GET /me</code> returns <code>{user: {id, email, name, avatarUrl, role, playerId}}</code></td>
+</tr>
+<tr>
+<td class="nw">FR-4.2</td>
+<td><code>role</code> comes from <code>users_roles</code>, taking the highest by <strong>ADMIN &gt; CAPTAIN &gt; PLAYER</strong>. A user with no row is <code>PLAYER</code></td>
+</tr>
+<tr>
+<td class="nw">FR-4.3</td>
+<td><code>playerId</code> is the <code>players.id</code> where <code>players.user_id = users.id</code>, or <code>null</code></td>
+</tr>
+<tr>
+<td class="nw">FR-4.4</td>
+<td>The FE treats only <code>playerId === null</code> as &quot;needs link&quot;. <code>undefined</code> (an older backend) leaves the gate inactive</td>
+</tr>
+</tbody></table></div>
+<h3 id="f04-logic"><span class="secnum">14.7.2</span> Logic</h3>
+<div class="code"><span class="code-lang">sql</span><button class="copy" type="button">Copy</button><pre><code class="lang-sql">SELECT r.code
+FROM users_roles ur
+JOIN roles r ON r.id = ur.role_id
+WHERE ur.user_id = $1
+ORDER BY CASE r.code WHEN 'ADMIN' THEN 1 WHEN 'CAPTAIN' THEN 2 ELSE 3 END
+LIMIT 1;  -- no row → 'PLAYER'</code></pre></div>
+<h3 id="f04-edge-cases"><span class="secnum">14.7.3</span> Edge cases</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Situation</th>
+<th>Expected</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">EC-4.1</td>
+<td>User has both ADMIN and CAPTAIN</td>
+<td><code>role = ADMIN</code>. Captain-owns-night still applies through <code>players.user_id</code></td>
+</tr>
+<tr>
+<td class="nw">EC-4.2</td>
+<td>User has the CAPTAIN role but isn&#39;t <code>captain_player_id</code> of any team</td>
+<td><code>role = CAPTAIN</code>, but <code>viewerCanManage</code> is false on every night</td>
+</tr>
+<tr>
+<td class="nw">EC-4.3</td>
+<td>Linked player is deleted</td>
+<td><code>user_id</code> FK is <code>ON DELETE SET NULL</code> → <code>playerId</code> becomes <code>null</code> → onboarding again</td>
+</tr>
+</tbody></table></div>
+<h3 id="f04-acceptance-criteria"><span class="secnum">14.7.4</span> Acceptance criteria</h3>
+<ul>
+<li><strong>AC-4.1</strong> Given the seeded <code>captain@example.test</code>, <code>/me</code> returns <code>role: &quot;CAPTAIN&quot;</code> and the <code>playerId</code> of member 95007620.</li>
+<li><strong>AC-4.2</strong> Given a user with no <code>users_roles</code> row, <code>role</code> is <code>&quot;PLAYER&quot;</code>.</li>
+</ul>
+</section>
+
+<h2 id="f05"><span class="secnum">14.8</span> F5 — Onboarding: link member ID</h2>
+<section class="feature"><div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>Status</th>
+<th>Rules</th>
+<th>Repo refs</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1</td>
+<td><span class="badge b-built">Built</span> UI · <span class="badge b-missing">Missing</span> API</td>
+<td><a href="../14-open-questions.html">Q31</a>, <a href="../14-open-questions.html">Q33</a></td>
+<td><code>league-fe/src/pages/OnboardingPage.tsx</code>, <code>src/components/auth/MemberPreviewCard.tsx</code>, <code>src/lib/member-id.ts</code>, <code>src/hooks/useMemberLink.ts</code>, <code>src/queries/members.ts</code></td>
+</tr>
+</tbody></table></div>
+<h3 id="f05-requirements"><span class="secnum">14.8.1</span> Requirements</h3>
+<p><em>As a newly signed-in player, I enter the member ID on my league card so the app knows which player I am.</em></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Requirement</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">FR-5.1</td>
+<td>Shows &quot;Find your member ID&quot; and &quot;Signed in as {email}&quot;, plus a numeric input (<code>inputMode=numeric</code>, max 8) with a real label</td>
+</tr>
+<tr>
+<td class="nw">FR-5.2</td>
+<td>Input is normalized to digits only and truncated to 8 (<code>normalizeMemberId</code>)</td>
+</tr>
+<tr>
+<td class="nw">FR-5.3</td>
+<td>Lookup runs once the ID has 8 digits, or on blur when it has at least 4. Never on every keystroke</td>
+</tr>
+<tr>
+<td class="nw">FR-5.4</td>
+<td>The preview shows the minimum: <code>displayName</code>, SL, team number and name, a captain flag, <code>alreadyLinked</code>, <code>linkedToMe</code></td>
+</tr>
+<tr>
+<td class="nw">FR-5.5</td>
+<td>Confirm is enabled only when a preview exists and the member isn&#39;t taken by another account (<code>isTaken = alreadyLinked &amp;&amp; !linkedToMe</code>). Re-linking to yourself is allowed (idempotent)</td>
+</tr>
+<tr>
+<td class="nw">FR-5.6</td>
+<td>Linking waits for the <code>/me</code> refetch before navigating to <code>/</code>, so the gate never sees a stale <code>playerId: null</code></td>
+</tr>
+<tr>
+<td class="nw">FR-5.7</td>
+<td>&quot;Not you? Sign out&quot; logs out</td>
+</tr>
+<tr>
+<td class="nw">FR-5.8</td>
+<td>The backend refuses linking to a member owned by another user (<code>40006</code>) and linking a user who already has a different member (<code>40007</code>). An unknown ID returns <code>40005</code></td>
+</tr>
+</tbody></table></div>
+<h3 id="f05-logic"><span class="secnum">14.8.2</span> Logic</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E01-identity-access-f05-1.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E01-identity-access-f05-1.svg" alt="Diagram: 14 - Identity &amp; Access" loading="lazy" data-diagram-file="features_E01-identity-access-f05-1.svg" width="1378" height="320"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_E01-identity-access-f05-1.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="f05-api--data"><span class="secnum">14.8.3</span> API &amp; data</h3>
+<p><code>GET /members/preview?member_id=95007620</code></p>
+<div class="code"><span class="code-lang">json</span><button class="copy" type="button">Copy</button><pre><code class="lang-json">{
+  &quot;session_id&quot;: &quot;&lt;session-id&gt;&quot;,
+  &quot;count&quot;: 1,
+  &quot;data&quot;: {
+    &quot;playerId&quot;: &quot;&lt;player-uuid&gt;&quot;,
+    &quot;displayName&quot;: &quot;Thomas D.&quot;,
+    &quot;skillLevel&quot;: 5,
+    &quot;teamId&quot;: &quot;&lt;team-uuid&gt;&quot;,
+    &quot;teamNumber&quot;: &quot;03209&quot;,
+    &quot;teamName&quot;: &quot;Chalk Dirty to Me&quot;,
+    &quot;isCaptain&quot;: true,
+    &quot;alreadyLinked&quot;: false,
+    &quot;linkedToMe&quot;: false
+  },
+  &quot;metadata&quot;: {}
+}</code></pre></div>
+<p><code>POST /me/link</code></p>
+<div class="code"><span class="code-lang">json</span><button class="copy" type="button">Copy</button><pre><code class="lang-json">{
+  &quot;memberId&quot;: &quot;95007620&quot;
+}</code></pre></div>
+<p>DB effect: <code>UPDATE players SET user_id = $user WHERE member_id = $1 AND (user_id IS NULL OR user_id = $user)</code>. <code>RowsAffected() = 0</code> means the member was taken in the meantime → <code>40006</code>.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Error</th>
+<th>Copy</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">40005</td>
+<td>&quot;We can&#39;t find that member ID. Check your league card.&quot;</td>
+</tr>
+<tr>
+<td class="nw">40006</td>
+<td>&quot;This member ID is linked to another account. Ask your league admin.&quot;</td>
+</tr>
+<tr>
+<td class="nw">40007</td>
+<td>&quot;This account is already linked to a different member.&quot;</td>
+</tr>
+</tbody></table></div>
+<h3 id="f05-edge-cases"><span class="secnum">14.8.4</span> Edge cases</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Situation</th>
+<th>Expected</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">EC-5.1</td>
+<td>User types <code>9500-7620</code></td>
+<td>Normalized to <code>95007620</code></td>
+</tr>
+<tr>
+<td class="nw">EC-5.2</td>
+<td>Two people race to link the same member</td>
+<td>The first wins; the second gets <code>40006</code></td>
+</tr>
+<tr>
+<td class="nw">EC-5.3</td>
+<td>Double-tap on confirm</td>
+<td>The second call is idempotent (<code>linkedToMe</code>), no error</td>
+</tr>
+<tr>
+<td class="nw">EC-5.4</td>
+<td>Attacker enumerates IDs via preview</td>
+<td>Rate-limit the endpoint and reveal only a display name (<a href="../14-open-questions.html">Q31</a>)</td>
+</tr>
+<tr>
+<td class="nw">EC-5.5</td>
+<td>Member not on any team</td>
+<td>Card shows &quot;No team yet&quot;</td>
+</tr>
+</tbody></table></div>
+<h3 id="f05-acceptance-criteria"><span class="secnum">14.8.5</span> Acceptance criteria</h3>
+<ul>
+<li><strong>AC-5.1</strong> Given <code>00000000</code>, the alert reads the <code>40005</code> copy and receives focus.</li>
+<li><strong>AC-5.2</strong> Given a member linked to another account, the card shows the warning tint and confirm is disabled.</li>
+<li><strong>AC-5.3</strong> After linking, <code>/me.playerId</code> is set and the user never sees <code>/onboarding</code> again.</li>
+</ul>
+<h3 id="f05-implementation-gaps"><span class="secnum">14.8.6</span> Implementation gaps</h3>
+<ul>
+<li>The backend endpoints don&#39;t exist, so every real user is stuck on onboarding. This is the most urgent part of E01.</li>
+<li>The 8-digit length is an FE assumption (<code>MEMBER_ID_LENGTH</code>); the DB has no length rule.</li>
+</ul>
+</section>
+
+<h2 id="f06"><span class="secnum">14.9</span> F6 — Role checks and captain-owns-night</h2>
+<section class="feature"><div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>Status</th>
+<th>Rules</th>
+<th>Repo refs</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1</td>
+<td><span class="badge b-built">Built</span> RBAC tables · <span class="badge b-missing">Missing</span> enforcement</td>
+<td>ADR-006, <a href="../11-security-and-roles.html">11 §2</a></td>
+<td><code>league-be/db/migrations/00001_init.sql</code> (RBAC seed) · planned <code>internal/league/services.go</code> · <code>league-fe/_parked/src/components/RequireAdmin.tsx</code></td>
+</tr>
+</tbody></table></div>
+<h3 id="f06-requirements"><span class="secnum">14.9.1</span> Requirements</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Requirement</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">FR-6.1</td>
+<td>Every league write route is wrapped in <code>RequireAuth</code> plus a role check</td>
+</tr>
+<tr>
+<td class="nw">FR-6.2</td>
+<td><strong>Captain-owns-night:</strong> put-up, result and submit are allowed when the role is ADMIN, or when the role is CAPTAIN <strong>and</strong> the user&#39;s player is <code>captain_player_id</code> of the night&#39;s home or away team</td>
+</tr>
+<tr>
+<td class="nw">FR-6.3</td>
+<td>The server returns <code>viewerCanManage</code> and <code>viewerSide</code> on the night payload. The FE never derives them itself</td>
+</tr>
+<tr>
+<td class="nw">FR-6.4</td>
+<td>Admin-only routes: player search, SL change and history, transfer, <code>/teams</code></td>
+</tr>
+<tr>
+<td class="nw">FR-6.5</td>
+<td>Denials return 403 <code>40304</code></td>
+</tr>
+<tr>
+<td class="nw">FR-6.6</td>
+<td>FE <code>RequireAdmin</code> hides <code>/admin/*</code> from non-admins (cosmetic only)</td>
+</tr>
+</tbody></table></div>
+<h3 id="f06-logic"><span class="secnum">14.9.2</span> Logic</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E01-identity-access-f06-1.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E01-identity-access-f06-1.svg" alt="Diagram: 14 - Identity &amp; Access" loading="lazy" data-diagram-file="features_E01-identity-access-f06-1.svg" width="799" height="1268"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_E01-identity-access-f06-1.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<p>Permission codes (seeded): <code>player.read</code>, <code>match.put_up</code>, <code>match.enter_score</code>, <code>match.submit</code>, <code>roster.manage</code>, <code>player.change_skill_level</code>, <code>season.manage</code>. In the MVP, checks are by role and ownership; permission codes become checks when the LO and Rep roles arrive (F50).</p>
+<h3 id="f06-edge-cases"><span class="secnum">14.9.3</span> Edge cases</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Situation</th>
+<th>Expected</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">EC-6.1</td>
+<td>Captain of team A posts a put-up to a night between B and C</td>
+<td>403 <code>40304</code></td>
+</tr>
+<tr>
+<td class="nw">EC-6.2</td>
+<td>Captain puts up for the opposing side</td>
+<td>403. A captain may act only for <code>viewerSide</code></td>
+</tr>
+<tr>
+<td class="nw">EC-6.3</td>
+<td>A team has no <code>captain_player_id</code></td>
+<td>Only an admin can run that night</td>
+</tr>
+<tr>
+<td class="nw">EC-6.4</td>
+<td>Admin edits a submitted night</td>
+<td>Allowed (and audited in Phase 2, F41)</td>
+</tr>
+</tbody></table></div>
+<h3 id="f06-acceptance-criteria"><span class="secnum">14.9.4</span> Acceptance criteria</h3>
+<ul>
+<li><strong>AC-6.1</strong> A PLAYER-role session gets 403 on every POST and PUT in the league API.</li>
+<li><strong>AC-6.2</strong> The captain of 03209 gets <code>viewerCanManage: true, viewerSide: &quot;home&quot;</code> on 03209 vs 03214.</li>
+</ul>
+</section>
+
+<h2 id="f37"><span class="secnum">14.10</span> F37 — Zalo login &amp; Mini App</h2>
+<section class="feature"><div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>Status</th>
+<th>Rules</th>
+<th>Repo refs</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>2</td>
+<td><span class="badge b-target">Target</span></td>
+<td>ADR-009 revisit</td>
+<td>new <code>internal/auth/services_zalo.go</code>, FE platform adapter</td>
+</tr>
+</tbody></table></div>
+<h3 id="f37-requirements"><span class="secnum">14.10.1</span> Requirements</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Requirement</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">FR-37.1</td>
+<td>Add Zalo as a second identity provider behind the existing <code>IdentityProvider</code> interface. Sessions and cookies stay unchanged</td>
+</tr>
+<tr>
+<td class="nw">FR-37.2</td>
+<td>New table <code>user_identities (user_id, provider, subject, UNIQUE(provider, subject))</code>. Google rows migrate from <code>users.google_sub</code></td>
+</tr>
+<tr>
+<td class="nw">FR-37.3</td>
+<td>Account linking: a signed-in user can attach Zalo to their account. Accounts are never merged by phone or email automatically</td>
+</tr>
+<tr>
+<td class="nw">FR-37.4</td>
+<td>The Mini App build wraps the same React app. A <code>platform</code> adapter provides <code>login</code>, <code>share</code> and <code>storage</code></td>
+</tr>
+<tr>
+<td class="nw">FR-37.5</td>
+<td>Inside the Mini App, Zalo login runs automatically; on the web, Google stays the default</td>
+</tr>
+</tbody></table></div>
+<h3 id="f37-flow"><span class="secnum">14.10.2</span> Flow</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E01-identity-access-f37-1.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E01-identity-access-f37-1.svg" alt="Diagram: 14 - Identity &amp; Access" loading="lazy" data-diagram-file="features_E01-identity-access-f37-1.svg" width="1086" height="653"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_E01-identity-access-f37-1.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="f37-edge-cases-and-open-points"><span class="secnum">14.10.3</span> Edge cases and open points</h3>
+<ul>
+<li><strong>Cookies inside the Zalo WebView:</strong> third-party and SameSite behaviour must be verified. If cookies fail, a header-token fallback would need a new ADR.</li>
+<li><strong>Same person on Google and Zalo:</strong> resolved by explicit linking from the profile (FR-37.3).</li>
+</ul>
+<h3 id="f37-acceptance-criteria"><span class="secnum">14.10.4</span> Acceptance criteria</h3>
+<ul>
+<li><strong>AC-37.1</strong> A Mini App user is signed in without a Google prompt, and <code>/me</code> works with the cookie session.</li>
+</ul>
+</section>
+
+</article>
+</main>
+<script src="../assets/site-data.js"></script>
+<script src="../assets/layout.js"></script>
+<script src="../assets/search-index.js"></script>
+<script src="../assets/site.js"></script>
+</body>
+</html>

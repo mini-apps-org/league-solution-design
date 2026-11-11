@@ -1,0 +1,341 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>11 - Security, Roles and Compliance · MViP Solution Design</title>
+<link rel="stylesheet" href="assets/site.css">
+<script src="assets/boot.js"></script>
+</head>
+<body data-root="" data-page="11-security-and-roles.html">
+<main id="main" class="content">
+<article class="doc">
+<h1>11 - Security, Roles and Compliance</h1>
+
+<blockquote>
+<p><span class="badge b-built">Built</span> as-built · <span class="badge b-planned">Planned</span> MVP · <span class="badge b-target">Target</span></p>
+</blockquote>
+<h2 id="1-authentication--league-beinternalauth"><span class="secnum">11.1</span> Authentication (<span class="badge b-built">Built</span><code>league-be/internal/auth</code>)</h2>
+<p><strong>Method:</strong> Google OAuth 2.0 / OIDC, Authorization Code + <strong>PKCE (S256)</strong> + <code>state</code> + <code>nonce</code>. Scopes are <code>openid email profile</code>.</p>
+<figure class="diagram"><a class="diagram-img" href="assets/diagrams/11-security-and-roles-1.svg" target="_blank" aria-label="Open diagram full screen"><img src="assets/diagrams/11-security-and-roles-1.svg" alt="Diagram: 11 - Security, Roles and Compliance" loading="lazy" data-diagram-file="11-security-and-roles-1.svg" width="1340" height="745"></a><figcaption><span></span><a class="full" href="assets/diagrams/11-security-and-roles-1.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Property</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Session token</td>
+<td>Opaque, 32 CSPRNG bytes (base64url), stored in <code>sessions.id</code>. <strong>No JWT, no refresh token</strong></td>
+</tr>
+<tr>
+<td>Absolute TTL</td>
+<td><code>SESSION_TTL</code> = 12 h (enforced in SQL on <code>created_at</code>)</td>
+</tr>
+<tr>
+<td>Idle TTL</td>
+<td><code>SESSION_IDLE_TTL</code> = 30 min (enforced on <code>last_seen_at</code>, refreshed on every authenticated request)</td>
+</tr>
+<tr>
+<td>Session fixation</td>
+<td>A new session id is issued on every login</td>
+</tr>
+<tr>
+<td>Cleanup</td>
+<td>Sweep at startup and every 24 h</td>
+</tr>
+<tr>
+<td>User lookup</td>
+<td>By <code>google_sub</code> only, never by email</td>
+</tr>
+<tr>
+<td>Errors</td>
+<td>Redirect to <code>/login?error=cancelled|login_failed|server_error</code></td>
+</tr>
+</tbody></table></div>
+<h3 id="11-cookies"><span class="secnum">11.1.1</span> Cookies</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Cookie</th>
+<th>Prod name</th>
+<th>HttpOnly</th>
+<th>Path</th>
+<th>Domain</th>
+<th>Max-Age</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Session</td>
+<td><code>__Host-sid</code></td>
+<td>yes</td>
+<td><code>/</code></td>
+<td>none (host-locked to <code>be.</code>)</td>
+<td><code>SESSION_TTL</code></td>
+</tr>
+<tr>
+<td>CSRF</td>
+<td><code>__Secure-csrf</code></td>
+<td><strong>no</strong> (SPA reads it)</td>
+<td><code>/</code></td>
+<td><code>mvip-league.com</code></td>
+<td><code>SESSION_TTL</code></td>
+</tr>
+<tr>
+<td>OAuth transaction</td>
+<td><code>__Secure-oauth_tx</code></td>
+<td>yes</td>
+<td><code>/api/v1/auth/google</code></td>
+<td>none</td>
+<td>10 min</td>
+</tr>
+</tbody></table></div>
+<ul>
+<li>All three cookies are <code>SameSite=Lax</code>. They are Secure and use the name prefixes <strong>only when <code>APP_ENV=production</code></strong>; dev and staging use plain names (<code>sid</code>, <code>csrf</code>, <code>oauth_tx</code>) without Secure or Domain.</li>
+<li>The FE reads <code>__Secure-csrf</code> and falls back to <code>csrf</code>. (<code>league-fe</code> <code>CLAUDE.md</code> and README still say <code>__Host-csrf</code>, which is stale; see <a href="14-open-questions.html">Q35</a>.)</li>
+</ul>
+<h3 id="12-csrf"><span class="secnum">11.1.2</span> CSRF</h3>
+<p>Double-submit on the whole <code>/api/v1</code> subrouter. Unsafe methods need the <code>csrf</code> cookie to equal header <code>X-CSRF-Token</code> (constant-time compare). A missing cookie returns <code>40301</code>; a mismatch returns <code>40302</code>.</p>
+<h3 id="13-onboarding--member-link-"><span class="secnum">11.1.3</span> Onboarding / member link (<span class="badge b-planned">Planned</span>)</h3>
+<p>After first login, <code>players.user_id</code> is NULL for this user, so <code>/me</code> returns <code>playerId: null</code> and the FE routes to <code>/onboarding</code>:</p>
+<ol>
+<li>The user enters their 8-digit member ID.</li>
+<li><code>GET /members/preview</code> returns a limited <code>MemberPreview</code> (<code>displayName</code>, SL, team, <code>alreadyLinked</code>, <code>linkedToMe</code>).</li>
+<li><code>POST /me/link</code> sets <code>players.user_id</code>.</li>
+</ol>
+<p><strong>Privacy risk:</strong> member IDs are guessable (the seeded IDs are sequential), so the preview must reveal as little as possible and be rate-limited (<a href="14-open-questions.html">Q31</a>).</p>
+<h2 id="2-roles-and-permissions"><span class="secnum">11.2</span> Roles and permissions</h2>
+<h3 id="21-as-built-data--seeded-in-00001_initsql"><span class="secnum">11.2.1</span> As-built data (<span class="badge b-built">Built</span> seeded in <code>00001_init.sql</code>)</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Permission code</th>
+<th>PLAYER</th>
+<th>CAPTAIN</th>
+<th>ADMIN</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>player.read</code></td>
+<td><span class="badge b-yes">Yes</span></td>
+<td><span class="badge b-yes">Yes</span></td>
+<td><span class="badge b-yes">Yes</span></td>
+</tr>
+<tr>
+<td><code>match.put_up</code></td>
+<td>—</td>
+<td><span class="badge b-yes">Yes</span></td>
+<td><span class="badge b-yes">Yes</span></td>
+</tr>
+<tr>
+<td><code>match.enter_score</code></td>
+<td>—</td>
+<td><span class="badge b-yes">Yes</span></td>
+<td><span class="badge b-yes">Yes</span></td>
+</tr>
+<tr>
+<td><code>match.submit</code></td>
+<td>—</td>
+<td><span class="badge b-yes">Yes</span></td>
+<td><span class="badge b-yes">Yes</span></td>
+</tr>
+<tr>
+<td><code>roster.manage</code></td>
+<td>—</td>
+<td><span class="badge b-yes">Yes</span></td>
+<td><span class="badge b-yes">Yes</span></td>
+</tr>
+<tr>
+<td><code>player.change_skill_level</code></td>
+<td>—</td>
+<td>—</td>
+<td><span class="badge b-yes">Yes</span></td>
+</tr>
+<tr>
+<td><code>season.manage</code></td>
+<td>—</td>
+<td>—</td>
+<td><span class="badge b-yes">Yes</span></td>
+</tr>
+</tbody></table></div>
+<ul>
+<li><strong>Role resolution (<span class="badge b-planned">Planned</span>):</strong> a user may have several rows in <code>users_roles</code>. <code>/me</code> returns the highest by <strong>ADMIN &gt; CAPTAIN &gt; PLAYER</strong>; no row means PLAYER (least privilege).</li>
+<li><strong>Enforcement today:</strong> none. No Go code reads these tables yet. The role middleware and permission checks come with <code>internal/league</code> (<span class="badge b-planned">Planned</span>).</li>
+</ul>
+<h3 id="22-action-matrix--mvp"><span class="secnum">11.2.2</span> Action matrix (<span class="badge b-planned">Planned</span> MVP)</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Action</th>
+<th>Player</th>
+<th>Captain</th>
+<th>Admin</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>View schedule, nights, rosters</td>
+<td><span class="badge b-yes">Yes</span></td>
+<td><span class="badge b-yes">Yes</span></td>
+<td><span class="badge b-yes">Yes</span></td>
+</tr>
+<tr>
+<td>Put up / enter result / submit night</td>
+<td>—</td>
+<td><span class="badge b-yes">Yes</span><strong>own night only</strong></td>
+<td><span class="badge b-yes">Yes</span> any</td>
+</tr>
+<tr>
+<td>Edit after submit</td>
+<td>—</td>
+<td>—</td>
+<td><span class="badge b-yes">Yes</span></td>
+</tr>
+<tr>
+<td>Add a paid member to own roster</td>
+<td>—</td>
+<td><span class="badge b-yes">Yes</span></td>
+<td><span class="badge b-yes">Yes</span></td>
+</tr>
+<tr>
+<td>Search players</td>
+<td>—</td>
+<td>—</td>
+<td><span class="badge b-yes">Yes</span></td>
+</tr>
+<tr>
+<td>Change SL (with reason) / see history</td>
+<td>—</td>
+<td>—</td>
+<td><span class="badge b-yes">Yes</span></td>
+</tr>
+<tr>
+<td>Transfer player</td>
+<td>—</td>
+<td>—</td>
+<td><span class="badge b-yes">Yes</span></td>
+</tr>
+</tbody></table></div>
+<p><strong>Captain-owns-this-night:</strong> the role is CAPTAIN <strong>and</strong> the user&#39;s <code>players.id</code> equals <code>captain_player_id</code> of the home or away team. The server computes this once (<code>viewerCanManage</code>, <code>viewerSide</code>). The FE hiding a button is cosmetic, not a permission check.</p>
+<h3 id="23--later-roles"><span class="secnum">11.2.3</span> <span class="badge b-target">Target</span> Later roles</h3>
+<p><code>LEAGUE_OPERATOR</code> and <code>DIVISION_REP</code> scoped per league/division (needs <code>users_roles.scope_*</code> or a separate grants table), and <code>SCOREKEEPER</code> as a lease holder for live scoring. These map onto the current ADMIN role until multi-league tenancy exists.</p>
+<h2 id="3-transport-and-headers-"><span class="secnum">11.3</span> Transport and headers (<span class="badge b-built">Built</span>)</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Control</th>
+<th>Setting</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>CORS</td>
+<td>Single origin <code>https://www.mvip-league.com</code>, credentials allowed, headers <code>Accept, Content-Type, Origin, X-CSRF-Token</code></td>
+</tr>
+<tr>
+<td>API headers</td>
+<td><code>X-Content-Type-Options: nosniff</code>, <code>X-Frame-Options: DENY</code>, <code>Referrer-Policy: no-referrer</code>, <code>Cross-Origin-Opener-Policy: same-origin</code>, CSP <code>default-src &#39;none&#39;; frame-ancestors &#39;none&#39;</code>, HSTS 1 y + subdomains (prod)</td>
+</tr>
+<tr>
+<td>FE headers (<code>vercel.json</code>)</td>
+<td><code>nosniff</code>, <code>Referrer-Policy: strict-origin-when-cross-origin</code>, <code>X-Frame-Options: DENY</code>, <code>Permissions-Policy</code> (camera, mic, geolocation off)</td>
+</tr>
+<tr>
+<td>Request size</td>
+<td>1 MiB JSON limit, unknown fields rejected</td>
+</tr>
+<tr>
+<td>Secrets</td>
+<td>Env vars only; <code>.env*</code> excluded from the image. CI → GCP via <strong>Workload Identity Federation</strong> (no JSON keys)</td>
+</tr>
+</tbody></table></div>
+<h2 id="4-known-gaps"><span class="secnum">11.4</span> Known gaps</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Gap</th>
+<th>Risk</th>
+<th>Action</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>No rate limiting</td>
+<td>Member IDs can be enumerated through the preview endpoint, and the login endpoints can be hammered</td>
+<td>Redis or in-memory token bucket; Cloudflare rate-limit rules on <code>/auth/*</code> and <code>/members/preview</code></td>
+</tr>
+<tr>
+<td>No role middleware yet</td>
+<td>All future league routes are unprotected until it exists</td>
+<td>Build it with <code>internal/league</code></td>
+</tr>
+<tr>
+<td>Google consent screen in Testing mode</td>
+<td>Only test users can sign in</td>
+<td>Publish before the beta</td>
+</tr>
+<tr>
+<td>Login CSRF (cookie forcing) not mitigated</td>
+<td>Low</td>
+<td>Accept for the MVP (documented in the auth README)</td>
+</tr>
+<tr>
+<td><code>audit_log</code> missing</td>
+<td>Only SL changes are recorded (<code>skill_level_history</code>)</td>
+<td>Phase 2 table</td>
+</tr>
+<tr>
+<td>Stale security docs</td>
+<td>Engineers follow wrong cookie names</td>
+<td>Fix the auth README and FE <code>CLAUDE.md</code> (<a href="14-open-questions.html">Q35</a>)</td>
+</tr>
+</tbody></table></div>
+<h2 id="5-data-integrity-and-anti-fraud"><span class="secnum">11.5</span> Data integrity and anti-fraud</h2>
+<ul>
+<li>SL changes go through <code>change_skill_level()</code> (reason required, history row, <code>changed_by</code>).</li>
+<li>Played matches keep their SL and race snapshots.</li>
+<li>Admins can edit after submit. <span class="badge b-target">Target</span> Phase 2 adds <code>audit_log</code> for every such edit, plus dual-captain verification and dispute records (<a href="04-domain-rules.html#8-score-matching-verification-and-bonus">04 §8</a>).</li>
+<li><span class="badge b-target">Target</span> Phase 3: anomaly detection on innings and defensive-shot ratios (anti-sandbagging).</li>
+</ul>
+<h2 id="6-privacy-vietnam-decree-132023nd-cp-pdpd"><span class="secnum">11.6</span> Privacy: Vietnam Decree 13/2023/ND-CP (PDPD)</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Requirement</th>
+<th>Implementation</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Consent</td>
+<td>Consent at first login (purpose: league operations, stats publication); store the version and time (<span class="badge b-target">Target</span>)</td>
+</tr>
+<tr>
+<td>Minimization</td>
+<td>Store only Google <code>sub</code>, email, name and avatar. Public views show name, member ID and stats only</td>
+</tr>
+<tr>
+<td>Member preview</td>
+<td>Reveal a display name only, never full contact data</td>
+</tr>
+<tr>
+<td>Data subject rights</td>
+<td>Export; deletion → pseudonymize the player and keep match history (&quot;Former member #ID&quot;)</td>
+</tr>
+<tr>
+<td>Location</td>
+<td>GCP <code>asia-southeast1</code> (Singapore). Document a cross-border transfer impact assessment</td>
+</tr>
+<tr>
+<td>Breach</td>
+<td>Notify within 72 h (runbook)</td>
+</tr>
+</tbody></table></div>
+
+</article>
+</main>
+<script src="assets/site-data.js"></script>
+<script src="assets/layout.js"></script>
+<script src="assets/search-index.js"></script>
+<script src="assets/site.js"></script>
+</body>
+</html>

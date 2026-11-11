@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>01 - Business Context · MViP Solution Design</title>
+<link rel="stylesheet" href="assets/site.css">
+<script src="assets/boot.js"></script>
+</head>
+<body data-root="" data-page="01-business-context.html">
+<main id="main" class="content">
+<article class="doc">
+<h1>01 - Business Context</h1>
+
+<h2 id="1-product-in-one-paragraph"><span class="secnum">1.1</span> Product in one paragraph</h2>
+<p><strong>MViP (Mini Vietnamese Pool league)</strong> is a centralized, <strong>handicap-based amateur pool league</strong> for Vietnam, modeled on the American Poolplayers Association (APA). Players join teams that play weekly at partner billiard clubs on off-peak weeknights. A skill-level (SL) handicap system lets beginners compete meaningfully against strong players. The software is the business: registration, rosters, schedules, <strong>live digital scorekeeping</strong>, handicap calculation, standings, player profiles, payments and tournaments.</p>
+<h2 id="2-why-this-model-works-apa-reference"><span class="secnum">1.2</span> Why this model works (APA reference)</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Aspect</th>
+<th>APA reference</th>
+<th>Implication for the software</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Asset-light franchise</td>
+<td>Corporate owns no venues; local <strong>League Operators (LOs)</strong> run territories</td>
+<td>Multi-tenant by league/area; LO admin portal is a first-class product</td>
+</tr>
+<tr>
+<td>Corporate role</td>
+<td>Rulebook, <strong>handicap algorithm</strong>, national tournaments, brand, <strong>software</strong>, sponsors</td>
+<td>Platform team owns rules engine, SL algorithm, app</td>
+</tr>
+<tr>
+<td>Operator role</td>
+<td>Local sales, venue recruitment, scheduling, scorekeeping enforcement, prize funds, weekly ops</td>
+<td>Admin portal: schedule builder, roster mgmt, dispute queue, payments</td>
+</tr>
+<tr>
+<td>Moat: handicap system</td>
+<td>SL 2–7 (8-Ball); race-to tables; <strong>23-SL team cap</strong> forces teams to include novices</td>
+<td>Rules engine must be exact, auditable, tamper-resistant</td>
+</tr>
+<tr>
+<td>Retention</td>
+<td>Social accountability (teams), official rating</td>
+<td>Profiles, stats, achievements, notifications</td>
+</tr>
+</tbody></table></div>
+<h2 id="3-stakeholders-and-actors"><span class="secnum">1.3</span> Stakeholders and actors</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Actor</th>
+<th>Goals</th>
+<th>Primary surface</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Super Admin / Corporate</strong></td>
+<td>Configure leagues, rules, fees, sponsors; national view</td>
+<td>Admin portal</td>
+</tr>
+<tr>
+<td><strong>League Operator (LO)</strong> (also called Referee / App Owner in DEMO)</td>
+<td>Run divisions, approve SL, transfer players, resolve disputes, collect fees</td>
+<td>Admin portal (desktop)</td>
+</tr>
+<tr>
+<td><strong>Division Rep</strong></td>
+<td>First contact for captains in a division</td>
+<td>Admin portal (scoped)</td>
+</tr>
+<tr>
+<td><strong>Host Venue</strong> (billiard club)</td>
+<td>Fill tables on slow nights, F&amp;B revenue</td>
+<td>Venue listing, schedule view (Phase 2: venue dashboard)</td>
+</tr>
+<tr>
+<td><strong>Team Captain</strong></td>
+<td>Register team, manage roster, run league night, submit scores</td>
+<td>Player app (mobile web PWA; Zalo Mini App in Phase 2)</td>
+</tr>
+<tr>
+<td><strong>Scorekeeper</strong> (any team member)</td>
+<td>Keep score accurately and fast</td>
+<td>Player app — scoring screens</td>
+</tr>
+<tr>
+<td><strong>Player</strong></td>
+<td>Play, see stats/SL/standings, pay fees, enter tournaments</td>
+<td>Player app</td>
+</tr>
+<tr>
+<td><strong>Sponsor</strong></td>
+<td>Brand exposure</td>
+<td>Phase 3: sponsored placements</td>
+</tr>
+<tr>
+<td><strong>Public / spectator</strong></td>
+<td>See schedules, results, standings</td>
+<td>Public web pages</td>
+</tr>
+</tbody></table></div>
+<h2 id="4-revenue-streams-to-support-in-software"><span class="secnum">1.4</span> Revenue streams (to support in software)</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Stream</th>
+<th>US APA</th>
+<th>Vietnam target</th>
+<th>Software needs</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Annual membership</td>
+<td>~$30–40</td>
+<td><strong>100,000–150,000 VND</strong></td>
+<td>Membership status, expiry, payment, block play if unpaid</td>
+</tr>
+<tr>
+<td>Weekly match fee</td>
+<td>$8–12 / match</td>
+<td><strong>50,000–80,000 VND / player / week</strong></td>
+<td>Per-match fee ledger; forfeits still pay</td>
+</tr>
+<tr>
+<td>Franchise / royalties</td>
+<td>Territorial fees + % of weekly</td>
+<td>LO split (configurable)</td>
+<td>Revenue reports per league</td>
+</tr>
+<tr>
+<td>Tournaments</td>
+<td>Entry fees, merch, vendors</td>
+<td>Da Nang / Nha Trang finals; Saigon / Hanoi qualifiers</td>
+<td>Tournament registration, brackets, entry fees</td>
+</tr>
+<tr>
+<td>Sponsors &amp; licensing</td>
+<td>Cue / beverage brands</td>
+<td>Local brands</td>
+<td>Sponsor slots (Phase 3)</td>
+</tr>
+</tbody></table></div>
+<p><strong>Unit economics (reference):</strong> 10 teams/division × 5 players = 50 matches/night → at 60k VND ≈ 3M VND/night/division → 16 weeks ≈ 48M VND/division/session.</p>
+<h2 id="5-vietnam-localization"><span class="secnum">1.5</span> Vietnam localization</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Pillar</th>
+<th>Decision</th>
+<th>Software impact</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Game variants</td>
+<td>8-Ball, 9-Ball first; 10-Ball / Carom later</td>
+<td>Format is a pluggable strategy</td>
+</tr>
+<tr>
+<td>Venues</td>
+<td>Large clubs (15+ tables, AC)</td>
+<td>One venue can host &gt;10 teams → secondary venue codes</td>
+</tr>
+<tr>
+<td>Scorekeeping</td>
+<td><strong>100% mobile</strong></td>
+<td>Phase 1: installable PWA &quot;Billiard League / Bida&quot; at <code>www.mvip-league.com</code>, Google sign-in. Phase 2: Zalo Mini App packaging + Zalo login</td>
+</tr>
+<tr>
+<td>Payments</td>
+<td>E-wallets (MoMo, ZaloPay)</td>
+<td>Payment provider abstraction</td>
+</tr>
+<tr>
+<td>Language</td>
+<td>Vietnamese first, English second</td>
+<td>i18n with glossary (see <a href="02-glossary.html">02-glossary.md</a>)</td>
+</tr>
+</tbody></table></div>
+<h2 id="6-risks-addressed-by-design"><span class="secnum">1.6</span> Risks addressed by design</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Risk</th>
+<th>Mitigation in software</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Sandbagging</strong> (deliberately losing / inflating innings to lower SL)</td>
+<td>Mandatory DS tracking, effective innings, SL suggestions with audit, anomaly detection (Phase 3), LO-only SL changes</td>
+</tr>
+<tr>
+<td><strong>Score disputes</strong></td>
+<td>Event-sourced scoring, dual-captain verification with bonus incentive, dispute queue</td>
+</tr>
+<tr>
+<td><strong>Venue disintermediation</strong></td>
+<td>Cross-club mobility, national ranking, tournament qualification only via platform</td>
+</tr>
+<tr>
+<td><strong>Bad connectivity in clubs</strong></td>
+<td>Offline-first scorekeeping with queued events</td>
+</tr>
+</tbody></table></div>
+<h2 id="7-phase-1-business-roadmap-months-16"><span class="secnum">1.7</span> Phase-1 business roadmap (months 1–6)</h2>
+<ol>
+<li>Legal setup (HCMC sports/event licensing), relationships with cue sports federations.</li>
+<li><strong>MVP software</strong> (this design, Phase 1): profile registration, digital scoring, standings, manual handicapping.</li>
+<li>Anchor clubs: 10 premier HCMC clubs.</li>
+<li><strong>Beta league:</strong> 10-week session, ~300 players → refine handicap thresholds and gather feedback.</li>
+</ol>
+<p>Success metrics for the beta: ≥ 95% of team matches scored digitally; ≥ 80% verified within the window without LO intervention; &lt; 2% disputes; median time to log an event &lt; 1 s.</p>
+
+</article>
+</main>
+<script src="assets/site-data.js"></script>
+<script src="assets/layout.js"></script>
+<script src="assets/search-index.js"></script>
+<script src="assets/site.js"></script>
+</body>
+</html>

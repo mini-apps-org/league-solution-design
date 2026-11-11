@@ -1,0 +1,550 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>07 - API Design · MViP Solution Design</title>
+<link rel="stylesheet" href="assets/site.css">
+<script src="assets/boot.js"></script>
+</head>
+<body data-root="" data-page="07-api-design.html">
+<main id="main" class="content">
+<article class="doc">
+<h1>07 - API Design</h1>
+
+<blockquote>
+<p><span class="badge b-built">Built</span><strong>Built</strong> = served by <code>league-be</code> on <code>master</code> today.
+<span class="badge b-planned">Planned</span><strong>Planned MVP</strong> = specified in <code>league-fe/plans/.../plan-3-league-api-endpoints.md</code> and already called by <code>league-fe/src/api/leagueAPI.ts</code>. The Go code (<code>internal/league</code>) <strong>is not in the repo</strong> (see <a href="15-as-built-vs-target.html">27</a>).
+<span class="badge b-target">Target</span><strong>Target</strong> = later phases.</p>
+</blockquote>
+<h2 id="1-conventions-as-built"><span class="secnum">7.1</span> Conventions (as-built)</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Topic</th>
+<th>Convention</th>
+<th>Source</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Base URL</td>
+<td><code>https://be.mvip-league.com/api/v1</code> (prod and staging); <code>http://localhost:9200/api/v1</code> (dev)</td>
+<td><code>internal/platform/config/*.yaml</code></td>
+</tr>
+<tr>
+<td>Router</td>
+<td>gorilla/mux subrouter <code>/api/v1</code></td>
+<td><code>internal/platform/router/router.go</code></td>
+</tr>
+<tr>
+<td>Auth</td>
+<td><strong>Cookie session</strong> (<code>sid</code>). The browser sends it with <code>credentials: &#39;include&#39;</code> / axios <code>withCredentials: true</code>. No bearer tokens</td>
+<td><code>internal/auth/middleware.go</code></td>
+</tr>
+<tr>
+<td>CSRF</td>
+<td>Double-submit. Every non-GET/HEAD/OPTIONS/TRACE request sends header <code>X-CSRF-Token</code> = value of the <code>csrf</code> cookie</td>
+<td><code>internal/platform/middleware/csrf.go</code></td>
+</tr>
+<tr>
+<td>CORS</td>
+<td>Exactly one origin, <code>app_base_url.frontend</code>. Credentials allowed. Headers <code>Accept</code>, <code>Content-Type</code>, <code>Origin</code>, <code>X-CSRF-Token</code></td>
+<td><code>cmd/server/main.go</code></td>
+</tr>
+<tr>
+<td>No custom headers on GET</td>
+<td>Keeps GETs &quot;CORS-simple&quot;, so the browser skips the preflight. Adding a header means updating the allow-list in the same commit</td>
+<td>plan-3 notes</td>
+</tr>
+<tr>
+<td>Request bodies</td>
+<td>JSON, <strong>camelCase</strong>. <code>DecodeJSON</code> caps the body at 1 MiB, <strong>rejects unknown fields</strong>, and requires a single object</td>
+<td><code>internal/platform/handler/handlers.go</code></td>
+</tr>
+<tr>
+<td>Query params</td>
+<td><strong>snake_case</strong> (<code>season_id</code>, <code>division_id</code>, <code>week_no</code>, <code>member_id</code>)</td>
+<td><code>league-fe/src/api/leagueAPI.ts</code></td>
+</tr>
+<tr>
+<td>Success envelope</td>
+<td><code>{ &quot;session_id&quot;, &quot;count&quot;, &quot;data&quot;, &quot;metadata&quot; }</code>. <code>count</code> = item count for lists, 1 otherwise</td>
+<td><code>config.SuccessResponse</code></td>
+</tr>
+<tr>
+<td>Error envelope</td>
+<td><code>{ &quot;error&quot;: { &quot;code&quot;: &quot;40401&quot;, &quot;message&quot;: &quot;…&quot; } }</code>. The reason slug goes to logs only</td>
+<td><code>internal/platform/handler/error.go</code></td>
+</tr>
+<tr>
+<td>Pagination</td>
+<td>Keyset cursor: default limit 50, max 200, cursor = <code>base64url(&quot;p1:&quot; + id)</code></td>
+<td><code>internal/platform/model/cursor.go</code> (<span class="badge b-assumption">Assumption</span> assumes integer ids; see <a href="14-open-questions.html">Q37</a>)</td>
+</tr>
+<tr>
+<td>Docs</td>
+<td>Swagger 2.0 via swaggo, served at <code>/swagger/index.html</code>. Regenerate with <code>make swagger</code></td>
+<td><code>docs/swagger/</code></td>
+</tr>
+<tr>
+<td>FE types</td>
+<td>Today hand-written in <code>league-fe/src/types/league.ts</code> (TEMPORARY). Target: generated from swagger with <code>openapi-typescript</code></td>
+<td></td>
+</tr>
+</tbody></table></div>
+<h3 id="11-success-envelope-example"><span class="secnum">7.1.1</span> Success envelope example</h3>
+<div class="code"><span class="code-lang">json</span><button class="copy" type="button">Copy</button><pre><code class="lang-json">{
+  &quot;session_id&quot;: &quot;&lt;session-id&gt;&quot;,
+  &quot;count&quot;: 2,
+  &quot;data&quot;: [
+    { &quot;id&quot;: &quot;&lt;season-uuid-1&gt;&quot;, &quot;name&quot;: &quot;Fall 2026&quot;, &quot;isActive&quot;: true },
+    { &quot;id&quot;: &quot;&lt;season-uuid-2&gt;&quot;, &quot;name&quot;: &quot;Summer 2026&quot;, &quot;isActive&quot;: false }
+  ],
+  &quot;metadata&quot;: {}
+}</code></pre></div>
+<h3 id="12-error-envelope-example"><span class="secnum">7.1.2</span> Error envelope example</h3>
+<div class="code"><span class="code-lang">json</span><button class="copy" type="button">Copy</button><pre><code class="lang-json">{
+  &quot;error&quot;: {
+    &quot;code&quot;: &quot;40004&quot;,
+    &quot;message&quot;: &quot;That player can't be put up.&quot;
+  }
+}</code></pre></div>
+<h3 id="13-error-code-registry"><span class="secnum">7.1.3</span> Error code registry</h3>
+<p>Codes are 5-digit strings; the first three digits are the HTTP status. <strong>Never renumber or reuse a shipped code.</strong> The FE maps each code to the i18n key <code>apiError.&lt;code&gt;</code>.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Code</th>
+<th>Reason</th>
+<th>Status</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">40001</td>
+<td><code>VALIDATION_FAILED</code></td>
+<td><span class="badge b-built">Built</span></td>
+<td>Invalid body or params (also unknown JSON fields)</td>
+</tr>
+<tr>
+<td class="nw">40002</td>
+<td>—</td>
+<td>retired</td>
+<td>Was the <code>app-id</code> header check. Never reuse</td>
+</tr>
+<tr>
+<td class="nw">40003</td>
+<td><code>UNPAID_MEMBER</code></td>
+<td><span class="badge b-planned">Planned</span></td>
+<td>Roster add of an unpaid player</td>
+</tr>
+<tr>
+<td class="nw">40004</td>
+<td><code>PUT_UP_REJECTED</code></td>
+<td><span class="badge b-planned">Planned</span></td>
+<td><code>can_put_up()</code> said no (cap, already played, not on roster, side complete)</td>
+</tr>
+<tr>
+<td>40005–40007</td>
+<td>(FE registry)</td>
+<td><span class="badge b-planned">Planned</span></td>
+<td>Reserved by the FE registry for league validation. Confirm the meaning when <code>internal/league</code> is restored</td>
+</tr>
+<tr>
+<td class="nw">40101</td>
+<td><code>SESSION_COOKIE_ABSENT</code></td>
+<td><span class="badge b-built">Built</span></td>
+<td>No <code>sid</code> cookie</td>
+</tr>
+<tr>
+<td class="nw">40102</td>
+<td><code>SESSION_INVALID</code></td>
+<td><span class="badge b-built">Built</span></td>
+<td>Session expired, idle or unknown</td>
+</tr>
+<tr>
+<td class="nw">40103</td>
+<td><code>USER_NOT_IN_CONTEXT</code></td>
+<td><span class="badge b-built">Built</span></td>
+<td>Handler ran without <code>RequireAuth</code></td>
+</tr>
+<tr>
+<td class="nw">40104</td>
+<td><code>UNAUTHENTICATED</code></td>
+<td><span class="badge b-built">Built</span></td>
+<td>Generic 401</td>
+</tr>
+<tr>
+<td class="nw">40301</td>
+<td><code>CSRF_COOKIE_ABSENT</code></td>
+<td><span class="badge b-built">Built</span></td>
+<td></td>
+</tr>
+<tr>
+<td class="nw">40302</td>
+<td><code>CSRF_TOKEN_MISMATCH</code></td>
+<td><span class="badge b-built">Built</span></td>
+<td></td>
+</tr>
+<tr>
+<td class="nw">40303</td>
+<td>—</td>
+<td>retired</td>
+<td>Was the <code>app-id</code> mismatch. Never reuse</td>
+</tr>
+<tr>
+<td class="nw">40304</td>
+<td><code>FORBIDDEN</code></td>
+<td><span class="badge b-built">Built</span></td>
+<td>Role or ownership check failed</td>
+</tr>
+<tr>
+<td class="nw">40401</td>
+<td><code>NOT_FOUND</code></td>
+<td><span class="badge b-built">Built</span></td>
+<td></td>
+</tr>
+<tr>
+<td class="nw">42901</td>
+<td><code>RATE_LIMITED</code></td>
+<td><span class="badge b-built">Built</span> code / <span class="badge b-target">Target</span> limiter</td>
+<td>Code defined, no limiter yet</td>
+</tr>
+<tr>
+<td class="nw">50001</td>
+<td><code>INTERNAL</code></td>
+<td><span class="badge b-built">Built</span></td>
+<td>Any non-<code>APIError</code> failure</td>
+</tr>
+<tr>
+<td class="nw">50201</td>
+<td><code>UPSTREAM_ERROR</code></td>
+<td><span class="badge b-built">Built</span></td>
+<td>Google or another upstream failed</td>
+</tr>
+</tbody></table></div>
+<h2 id="2-resource-map"><span class="secnum">7.2</span> Resource map</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Endpoint</th>
+<th>Method</th>
+<th>Who</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>/api/v1</code>, <code>/api/v1/health</code></td>
+<td>GET</td>
+<td>public</td>
+<td><span class="badge b-built">Built</span> Liveness only (<code>{ok, env, image}</code>), no DB check</td>
+</tr>
+<tr>
+<td><code>/auth/google/login</code></td>
+<td>GET</td>
+<td>public</td>
+<td><span class="badge b-built">Built</span>302 to Google (PKCE + state + nonce)</td>
+</tr>
+<tr>
+<td><code>/auth/google/callback</code></td>
+<td>GET</td>
+<td>Google redirect</td>
+<td><span class="badge b-built">Built</span> Sets <code>sid</code> + <code>csrf</code>; 302 to the FE (<code>/onboarding</code> for new users)</td>
+</tr>
+<tr>
+<td><code>/auth/logout</code></td>
+<td>POST</td>
+<td>any (CSRF)</td>
+<td><span class="badge b-built">Built</span>204; clears cookies</td>
+</tr>
+<tr>
+<td><code>/me</code></td>
+<td>GET</td>
+<td>session</td>
+<td><span class="badge b-built">Built</span><code>{user:{id,email,name,avatarUrl}}</code>. <span class="badge b-planned">Planned</span> adds <code>role</code> (ADMIN &gt; CAPTAIN &gt; PLAYER from <code>users_roles</code>) and <code>playerId</code></td>
+</tr>
+<tr>
+<td><code>/members/preview?member_id=</code></td>
+<td>GET</td>
+<td>session</td>
+<td><span class="badge b-planned">Planned</span> Onboarding: what the server reveals about a member before claiming (<code>MemberPreview</code>)</td>
+</tr>
+<tr>
+<td><code>/me/link</code></td>
+<td>POST</td>
+<td>session (CSRF)</td>
+<td><span class="badge b-planned">Planned</span> Link the signed-in user to a <code>players</code> row</td>
+</tr>
+<tr>
+<td><code>/seasons</code></td>
+<td>GET</td>
+<td>session</td>
+<td><span class="badge b-planned">Planned</span> Session select</td>
+</tr>
+<tr>
+<td><code>/divisions?season_id=</code></td>
+<td>GET</td>
+<td>session</td>
+<td><span class="badge b-planned">Planned</span></td>
+</tr>
+<tr>
+<td><code>/team-matches?division_id=&amp;week_no=</code></td>
+<td>GET</td>
+<td>session</td>
+<td><span class="badge b-planned">Planned</span> Fixture cards. <code>week_no</code> is optional; the FE derives week chips</td>
+</tr>
+<tr>
+<td><code>/team-matches/{id}</code></td>
+<td>GET</td>
+<td>session</td>
+<td><span class="badge b-planned">Planned</span> One night: both rosters (<code>player_division_stats</code>), 5 matches, <code>viewerCanManage</code>, <code>viewerSide</code></td>
+</tr>
+<tr>
+<td><code>/team-matches/{id}/available?side=&amp;match_order=</code></td>
+<td>GET</td>
+<td>captain/admin</td>
+<td><span class="badge b-planned">Planned</span> Put-up list with <code>canPutUp</code> + <code>blockReason</code></td>
+</tr>
+<tr>
+<td><code>/team-matches/{id}/put-up</code></td>
+<td>POST</td>
+<td>captain (own night)/admin</td>
+<td><span class="badge b-planned">Planned</span> Re-checks <code>can_put_up()</code>; 400 <code>40004</code> if blocked</td>
+</tr>
+<tr>
+<td><code>/individual-matches/{id}/result</code></td>
+<td>PUT</td>
+<td>captain (own night)/admin</td>
+<td><span class="badge b-planned">Planned</span> Triggers compute the points; returns the row</td>
+</tr>
+<tr>
+<td><code>/team-matches/{id}/submit</code></td>
+<td>POST</td>
+<td>captain (own night)/admin</td>
+<td><span class="badge b-planned">Planned</span><code>status = submitted</code>; refused if incomplete</td>
+</tr>
+<tr>
+<td><code>/teams?division_id=</code></td>
+<td>GET</td>
+<td>admin</td>
+<td><span class="badge b-planned">Planned</span> For the transfer control</td>
+</tr>
+<tr>
+<td><code>/teams/{id}/roster</code></td>
+<td>POST</td>
+<td>captain/admin</td>
+<td><span class="badge b-planned">Planned</span> Add an existing <strong>paid</strong> member; unpaid → <code>40003</code></td>
+</tr>
+<tr>
+<td><code>/players?q=</code></td>
+<td>GET</td>
+<td>admin</td>
+<td><span class="badge b-planned">Planned</span> Search by name or <code>member_id</code> (<code>LIKE</code> input escaped)</td>
+</tr>
+<tr>
+<td><code>/players/{id}/skill-level</code></td>
+<td>POST</td>
+<td>admin</td>
+<td><span class="badge b-planned">Planned</span> Calls <code>change_skill_level()</code></td>
+</tr>
+<tr>
+<td><code>/players/{id}/skill-level-history</code></td>
+<td>GET</td>
+<td>admin</td>
+<td><span class="badge b-planned">Planned</span></td>
+</tr>
+<tr>
+<td><code>/team-matches/{id}/events</code>, <code>/live</code>, <code>/lease</code>, <code>/summary</code>, <code>/verifications</code></td>
+<td>—</td>
+<td>—</td>
+<td><span class="badge b-target">Target</span> Phase 2 live scoring and verification (<a href="08-scorekeeping-engine.html">08</a>)</td>
+</tr>
+<tr>
+<td><code>/standings?division_id=</code></td>
+<td>GET</td>
+<td>public</td>
+<td><span class="badge b-target">Target</span> Over the <code>team_standings</code> view</td>
+</tr>
+<tr>
+<td><code>/players/{id}/stats</code></td>
+<td>GET</td>
+<td>session</td>
+<td><span class="badge b-target">Target</span> Profile Stats tab</td>
+</tr>
+<tr>
+<td><code>/fees</code>, <code>/payments/webhooks/{provider}</code></td>
+<td>—</td>
+<td>—</td>
+<td><span class="badge b-target">Target</span> Phase 2</td>
+</tr>
+<tr>
+<td><code>/tournaments/*</code></td>
+<td>—</td>
+<td>—</td>
+<td><span class="badge b-target">Target</span> Phase 3</td>
+</tr>
+<tr>
+<td><code>/ws</code></td>
+<td>WS</td>
+<td>—</td>
+<td><span class="badge b-target">Target</span> Phase 2</td>
+</tr>
+</tbody></table></div>
+<p><strong>Authorization rule (<span class="badge b-planned">Planned</span>):</strong> &quot;captain owns this night&quot; means the user&#39;s role is CAPTAIN <strong>and</strong> <code>players.user_id</code> is the <code>captain_player_id</code> of the home or away team of that team match. It is implemented once as a helper and reused for put-up, result and submit. The server returns the answer as <code>viewerCanManage</code> / <code>viewerSide</code>, so the UI never re-derives it.</p>
+<h2 id="3--critical-mvp-flows-requestresponse-examples"><span class="secnum">7.3</span> <span class="badge b-planned">Planned</span> Critical MVP flows: request/response examples</h2>
+<h3 id="31-get-apiv1me"><span class="secnum">7.3.1</span> <code>GET /api/v1/me</code></h3>
+<div class="code"><span class="code-lang">json</span><button class="copy" type="button">Copy</button><pre><code class="lang-json">{
+  &quot;session_id&quot;: &quot;&lt;session-id&gt;&quot;,
+  &quot;count&quot;: 1,
+  &quot;data&quot;: {
+    &quot;user&quot;: {
+      &quot;id&quot;: &quot;&lt;user-uuid&gt;&quot;,
+      &quot;email&quot;: &quot;captain@example.com&quot;,
+      &quot;name&quot;: &quot;Thomas Dinh&quot;,
+      &quot;avatarUrl&quot;: &quot;https://lh3.googleusercontent.com/&lt;path&gt;&quot;,
+      &quot;role&quot;: &quot;CAPTAIN&quot;,
+      &quot;playerId&quot;: &quot;&lt;player-uuid&gt;&quot;
+    }
+  },
+  &quot;metadata&quot;: {}
+}</code></pre></div>
+<p><code>playerId: null</code> means the account isn&#39;t linked to a member yet, and the FE sends the user to <code>/onboarding</code>. <code>role</code> and <code>playerId</code> are <span class="badge b-planned">Planned</span>; the as-built <code>/me</code> returns only <code>id</code>, <code>email</code>, <code>name</code> and <code>avatarUrl</code>.</p>
+<h3 id="32-get-apiv1team-matchesidavailablesidehomematch_order2"><span class="secnum">7.3.2</span> <code>GET /api/v1/team-matches/{id}/available?side=home&amp;match_order=2</code></h3>
+<div class="code"><span class="code-lang">json</span><button class="copy" type="button">Copy</button><pre><code class="lang-json">{
+  &quot;session_id&quot;: &quot;&lt;session-id&gt;&quot;,
+  &quot;count&quot;: 3,
+  &quot;data&quot;: [
+    {
+      &quot;playerId&quot;: &quot;&lt;player-uuid-1&gt;&quot;,
+      &quot;memberId&quot;: &quot;95007620&quot;,
+      &quot;fullName&quot;: &quot;Somya Shah&quot;,
+      &quot;skillLevel&quot;: 5,
+      &quot;canPutUp&quot;: false,
+      &quot;blockReason&quot;: &quot;already_put_up&quot;
+    },
+    {
+      &quot;playerId&quot;: &quot;&lt;player-uuid-2&gt;&quot;,
+      &quot;memberId&quot;: &quot;95007633&quot;,
+      &quot;fullName&quot;: &quot;Rip Wheeler&quot;,
+      &quot;skillLevel&quot;: 6,
+      &quot;canPutUp&quot;: false,
+      &quot;blockReason&quot;: &quot;would_break_23&quot;
+    },
+    {
+      &quot;playerId&quot;: &quot;&lt;player-uuid-3&gt;&quot;,
+      &quot;memberId&quot;: &quot;95007641&quot;,
+      &quot;fullName&quot;: &quot;Bing Brennan&quot;,
+      &quot;skillLevel&quot;: 3,
+      &quot;canPutUp&quot;: true,
+      &quot;blockReason&quot;: null
+    }
+  ],
+  &quot;metadata&quot;: {}
+}</code></pre></div>
+<h3 id="33-post-apiv1team-matchesidput-up"><span class="secnum">7.3.3</span> <code>POST /api/v1/team-matches/{id}/put-up</code></h3>
+<p>Request (header <code>X-CSRF-Token</code>):</p>
+<div class="code"><span class="code-lang">json</span><button class="copy" type="button">Copy</button><pre><code class="lang-json">{
+  &quot;matchOrder&quot;: 2,
+  &quot;side&quot;: &quot;home&quot;,
+  &quot;playerId&quot;: &quot;&lt;player-uuid-3&gt;&quot;
+}</code></pre></div>
+<p>When both sides are up, the response is the <code>individual_matches</code> row with its snapshots filled in by <code>fn_snapshot_put_up</code>:</p>
+<div class="code"><span class="code-lang">json</span><button class="copy" type="button">Copy</button><pre><code class="lang-json">{
+  &quot;session_id&quot;: &quot;&lt;session-id&gt;&quot;,
+  &quot;count&quot;: 1,
+  &quot;data&quot;: {
+    &quot;id&quot;: &quot;&lt;individual-match-uuid&gt;&quot;,
+    &quot;matchOrder&quot;: 2,
+    &quot;firstPutUp&quot;: &quot;away&quot;,
+    &quot;status&quot;: &quot;pending&quot;,
+    &quot;homePlayerId&quot;: &quot;&lt;player-uuid-3&gt;&quot;,
+    &quot;awayPlayerId&quot;: &quot;&lt;player-uuid-9&gt;&quot;,
+    &quot;homeSkillLevel&quot;: 3,
+    &quot;awaySkillLevel&quot;: 5,
+    &quot;homeRace&quot;: 2,
+    &quot;awayRace&quot;: 4,
+    &quot;homeGames&quot;: 0,
+    &quot;awayGames&quot;: 0,
+    &quot;innings&quot;: null,
+    &quot;homeDefShots&quot;: 0,
+    &quot;awayDefShots&quot;: 0,
+    &quot;homePoints&quot;: 0,
+    &quot;awayPoints&quot;: 0
+  },
+  &quot;metadata&quot;: {}
+}</code></pre></div>
+<p>A blocked player returns <code>400</code> with <code>{&quot;error&quot;:{&quot;code&quot;:&quot;40004&quot;, …}}</code>, even if the GET said they were available, because another captain may have acted in the meantime.</p>
+<h3 id="34-put-apiv1individual-matchesidresult"><span class="secnum">7.3.4</span> <code>PUT /api/v1/individual-matches/{id}/result</code></h3>
+<p>Request:</p>
+<div class="code"><span class="code-lang">json</span><button class="copy" type="button">Copy</button><pre><code class="lang-json">{
+  &quot;homeGames&quot;: 2,
+  &quot;awayGames&quot;: 3,
+  &quot;innings&quot;: 21,
+  &quot;homeDefShots&quot;: 1,
+  &quot;awayDefShots&quot;: 0
+}</code></pre></div>
+<p>Response: the row with points computed by <code>fn_score_individual_match</code>. Home (SL3, race 2) reached 2/2 and <strong>wins</strong>. Away (SL5, race 4) finished 3/4, which is on the hill (4 − 1 = 3), so the points are <strong>2/1</strong>:</p>
+<div class="code"><span class="code-lang">json</span><button class="copy" type="button">Copy</button><pre><code class="lang-json">{
+  &quot;session_id&quot;: &quot;&lt;session-id&gt;&quot;,
+  &quot;count&quot;: 1,
+  &quot;data&quot;: {
+    &quot;id&quot;: &quot;&lt;individual-match-uuid&gt;&quot;,
+    &quot;status&quot;: &quot;complete&quot;,
+    &quot;homeRace&quot;: 2,
+    &quot;awayRace&quot;: 4,
+    &quot;homeGames&quot;: 2,
+    &quot;awayGames&quot;: 3,
+    &quot;homePoints&quot;: 2,
+    &quot;awayPoints&quot;: 1
+  },
+  &quot;metadata&quot;: {}
+}</code></pre></div>
+<p>Games above a race, or both players at their race, are rejected by the trigger → <code>400 40001</code>.</p>
+<h3 id="35-post-apiv1playersidskill-level-admin"><span class="secnum">7.3.5</span> <code>POST /api/v1/players/{id}/skill-level</code> (admin)</h3>
+<div class="code"><span class="code-lang">json</span><button class="copy" type="button">Copy</button><pre><code class="lang-json">{
+  &quot;newSkillLevel&quot;: 4,
+  &quot;reason&quot;: &quot;Promoted after review&quot;
+}</code></pre></div>
+<p>This returns the new <code>skill_level_history</code> row. A played match keeps its snapshot; the new SL applies from the next put-up.</p>
+<h3 id="36-post-apiv1team-matchesidsubmit"><span class="secnum">7.3.6</span> <code>POST /api/v1/team-matches/{id}/submit</code></h3>
+<p>No body. The response is the team match with <code>&quot;status&quot;: &quot;submitted&quot;</code>, <code>submittedAt</code> and the final <code>homePoints</code> / <code>awayPoints</code>. The request is refused (<code>400 40001</code>) unless all 5 individual matches are <code>complete</code>.</p>
+<h2 id="4--phase-2-live-scoring-api"><span class="secnum">7.4</span> <span class="badge b-target">Target</span> Phase 2: live scoring API</h2>
+<p>The event-batch API, the scoring lease, the verification snapshot and the WebSocket channels are specified in <a href="08-scorekeeping-engine.html">08 — Scorekeeping engine</a>. When they are built they must follow the conventions in §1:</p>
+<ul>
+<li>camelCase bodies.</li>
+<li>The repo envelopes.</li>
+<li>5-digit error codes allocated from the next free number per status.</li>
+<li>CSRF on writes.</li>
+</ul>
+<p>The idempotency key is carried <strong>in the body</strong> (per event), not as a custom header, to keep the CORS allow-list small.</p>
+<h2 id="5-rate-limits-"><span class="secnum">7.5</span> Rate limits (<span class="badge b-target">Target</span>)</h2>
+<p>There is no limiter today; only code <code>42901</code> exists. Target limits:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Scope</th>
+<th>Limit</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>/auth/google/*</code></td>
+<td>10 / IP / min</td>
+</tr>
+<tr>
+<td>Writes</td>
+<td>60 / user / min, burst 120</td>
+</tr>
+<tr>
+<td>Public reads</td>
+<td>Cached at Cloudflare (standings 60 s, schedule 300 s)</td>
+</tr>
+</tbody></table></div>
+
+</article>
+</main>
+<script src="assets/site-data.js"></script>
+<script src="assets/layout.js"></script>
+<script src="assets/search-index.js"></script>
+<script src="assets/site.js"></script>
+</body>
+</html>

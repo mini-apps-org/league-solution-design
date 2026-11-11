@@ -1,0 +1,1073 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>04 - Domain Rules Specification · MViP Solution Design</title>
+<link rel="stylesheet" href="assets/site.css">
+<script src="assets/boot.js"></script>
+</head>
+<body data-root="" data-page="04-domain-rules.html">
+<main id="main" class="content">
+<article class="doc">
+<h1>04 - Domain Rules Specification</h1>
+
+<blockquote>
+<p>This chapter is the <strong>source of truth for business logic</strong>. Every rule has an ID (<code>R-xxx</code>) that code, tests and tickets should reference. Rule tables are reproduced in machine-readable form in <a href="appendix-rule-tables.html">appendix-rule-tables.md</a>.</p>
+<p>Legend: <span class="badge b-yes">Yes</span> confirmed by the Notion sources · <span class="badge b-assumption">Assumption</span> assumption (not in the sources, APA default adopted; see <a href="14-open-questions.html">14-open-questions.md</a>) · <span class="badge b-corrected">Corrected</span> source defect</p>
+</blockquote>
+<h2 id="0-where-each-rule-is-implemented"><span class="secnum">4.0</span> Where each rule is implemented</h2>
+<p>Per <a href="05-architecture.html#7-architecture-decisions">ADR-004</a>, rules live in <strong>Postgres</strong>. The FE mirror (<code>league-fe/_parked/src/lib/rules.ts</code>) is only a preview, and the server value wins. <span class="badge b-built">Built</span>= in <code>00001_init.sql</code> today; <span class="badge b-planned">Planned</span>= in the planned <code>00002_business_rules.sql</code> (missing from the repo, see <a href="15-as-built-vs-target.html">27</a>); <span class="badge b-target">Target</span>= later phase.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Rule</th>
+<th>Implementation</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>R-011 single roster</td>
+<td>Partial unique index on <code>team_rosters (player_id) WHERE left_at IS NULL</code> (one active roster in total, stricter than the rule; see <a href="14-open-questions.html">Q32</a>)</td>
+<td><span class="badge b-planned">Planned</span></td>
+</tr>
+<tr>
+<td>R-014 paid before play</td>
+<td><code>players.is_paid</code>; roster add refuses unpaid players (<code>40003</code>)</td>
+<td><span class="badge b-built">Built</span> column · <span class="badge b-planned">Planned</span> check</td>
+</tr>
+<tr>
+<td>R-016 roster lock after week 4</td>
+<td>Not implemented</td>
+<td><span class="badge b-target">Target</span></td>
+</tr>
+<tr>
+<td>R-017 captain adds a paid member</td>
+<td><code>POST /teams/{id}/roster</code></td>
+<td><span class="badge b-planned">Planned</span></td>
+</tr>
+<tr>
+<td>R-019 default SL 3</td>
+<td><code>players.skill_level DEFAULT 3</code></td>
+<td><span class="badge b-built">Built</span></td>
+</tr>
+<tr>
+<td>R-030/R-031 put-up order</td>
+<td>MVP: <strong>home puts up first in match 1, then alternate</strong> (<code>individual_matches.first_put_up</code>, FE <code>night.ts</code>). Coin flip is <span class="badge b-target">Target</span> Phase 2</td>
+<td><span class="badge b-planned">Planned</span></td>
+</tr>
+<tr>
+<td>R-034/R-035 23-SL cap</td>
+<td><code>put_up_block_reason()</code> → <code>would_break_23</code>, reading <code>divisions.skill_level_cap</code></td>
+<td><span class="badge b-planned">Planned</span></td>
+</tr>
+<tr>
+<td>R-036 one match per player per night</td>
+<td><code>put_up_block_reason()</code> → <code>already_put_up</code></td>
+<td><span class="badge b-planned">Planned</span></td>
+</tr>
+<tr>
+<td>R-050/R-125 SL + race snapshot</td>
+<td><code>fn_snapshot_put_up()</code> (trigger <code>trg_10_…</code>), lookup in the <code>race_chart</code> table</td>
+<td><span class="badge b-built">Built</span> table · <span class="badge b-planned">Planned</span> trigger</td>
+</tr>
+<tr>
+<td>§5.1 race chart</td>
+<td><code>race_chart</code> (36 rows, SL6v4 = 5/3)</td>
+<td><span class="badge b-built">Built</span></td>
+</tr>
+<tr>
+<td>§5.3 points 3/2/1</td>
+<td><code>fn_score_individual_match()</code> (trigger <code>trg_20_…</code>); hill = <code>race − 1</code></td>
+<td><span class="badge b-planned">Planned</span></td>
+</tr>
+<tr>
+<td>Night totals</td>
+<td><code>fn_roll_up_team_points()</code> → <code>team_matches.home_points/away_points</code></td>
+<td><span class="badge b-planned">Planned</span></td>
+</tr>
+<tr>
+<td>R-100–R-104 innings, DS, timeouts</td>
+<td>MVP stores <strong>match totals</strong> entered after play (<code>innings</code>, <code>home_def_shots</code>, <code>away_def_shots</code>); no timeouts. Per-turn tracking is <span class="badge b-target">Target</span> Phase 2</td>
+<td><span class="badge b-built">Built</span> columns</td>
+</tr>
+<tr>
+<td>§6 9-Ball</td>
+<td>Not implemented; <code>divisions.format</code> defaults to <code>&#39;8-ball&#39;</code></td>
+<td><span class="badge b-target">Target</span></td>
+</tr>
+<tr>
+<td>§8 verification + bonus</td>
+<td>MVP: <strong>captain submit only</strong> (<code>status = submitted</code>). Dual-captain matching and the bonus are <span class="badge b-target">Target</span> Phase 2</td>
+<td><span class="badge b-planned">Planned</span> submit</td>
+</tr>
+<tr>
+<td>§9 accolades</td>
+<td>Needs rack data</td>
+<td><span class="badge b-target">Target</span></td>
+</tr>
+<tr>
+<td>R-120 manual SL change</td>
+<td><code>change_skill_level()</code> → <code>skill_level_history</code> (reason required)</td>
+<td><span class="badge b-planned">Planned</span></td>
+</tr>
+<tr>
+<td>R-121–R-123 SL auto-calculation</td>
+<td>Not implemented</td>
+<td><span class="badge b-target">Target</span></td>
+</tr>
+<tr>
+<td>§11 IDs</td>
+<td><code>players.member_id</code> TEXT (8 digits assumed); <code>teams.team_number</code> APA-style (<code>03209</code>). The generators in §11 are <span class="badge b-target">Target</span></td>
+<td><span class="badge b-built">Built</span> columns</td>
+</tr>
+<tr>
+<td>§12 profile stats</td>
+<td><code>players_stats</code> (trigger-maintained), <code>player_division_stats</code> view</td>
+<td><span class="badge b-built">Built</span> table · <span class="badge b-planned">Planned</span> trigger/view</td>
+</tr>
+<tr>
+<td>Standings</td>
+<td><code>team_standings</code> view (counts only <code>submitted</code> nights)</td>
+<td><span class="badge b-planned">Planned</span></td>
+</tr>
+</tbody></table></div>
+<hr>
+<h2 id="1-league-hierarchy"><span class="secnum">4.1</span> League hierarchy</h2>
+<figure class="diagram"><a class="diagram-img" href="assets/diagrams/04-domain-rules-1.svg" target="_blank" aria-label="Open diagram full screen"><img src="assets/diagrams/04-domain-rules-1.svg" alt="Diagram: 04 - Domain Rules Specification" loading="lazy" data-diagram-file="04-domain-rules-1.svg" width="586" height="1086"></a><figcaption><span></span><a class="full" href="assets/diagrams/04-domain-rules-1.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Rule</th>
+<th>Source</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>R-001 <span class="badge b-confirmed">Confirmed</span></td>
+<td>A <strong>Session</strong> is a seasonal block of weekly play (Spring, Summer, Fall), typically 15–17 weeks; the Beta pilot is 10 weeks.</td>
+<td>Business intro §2.1, §6.1</td>
+</tr>
+<tr>
+<td>R-002 <span class="badge b-confirmed">Confirmed</span></td>
+<td>A <strong>Division</strong> groups teams that play on the <strong>same night</strong> in the <strong>same format</strong> within a geographic area. Identified by a 3-digit code + name (e.g. <code>031 – Wednesday 8-Ball North</code>).</td>
+<td>Division Difference §1</td>
+</tr>
+<tr>
+<td>R-003 <span class="badge b-confirmed">Confirmed</span></td>
+<td>A Team Match consists of <strong>5 individual head-to-head matches</strong> (Match 1–5).</td>
+<td>Foundation DB #3/#4, Score keeper</td>
+</tr>
+<tr>
+<td>R-004 <span class="badge b-confirmed">Confirmed</span></td>
+<td>Weekly schedule entries can be a match, a <strong>Bye</strong>, or <strong>No Play</strong> (holiday). Bye / No Play render as neutral, non-clickable banners.</td>
+<td>Foundation DB #5</td>
+</tr>
+</tbody></table></div>
+<h2 id="2-division-formats"><span class="secnum">4.2</span> Division formats</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Attribute</th>
+<th>8-Ball</th>
+<th>9-Ball</th>
+<th>Master</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Scoring</td>
+<td>In-app (racks, race-to)</td>
+<td>In-app (ball points, race-to-points)</td>
+<td>Open — international rules (Phase 3, TBD)</td>
+</tr>
+<tr>
+<td>Rules &amp; bylaws</td>
+<td>Restricted by LO and local house rules</td>
+<td>(same as 8-Ball assumed <span class="badge b-assumption">Assumption</span>)</td>
+<td>Open (international rules)</td>
+</tr>
+<tr>
+<td>23-SL team cap</td>
+<td>Yes</td>
+<td>Yes</td>
+<td><strong>No</strong></td>
+</tr>
+<tr>
+<td>SL range</td>
+<td>SL 2–7</td>
+<td>SL 1–9</td>
+<td>None</td>
+</tr>
+<tr>
+<td>SL leveling basis</td>
+<td>Innings (minus defensive shots) over the <strong>last 10 won games</strong></td>
+<td><strong>PPI</strong> (points per inning)</td>
+<td>None</td>
+</tr>
+<tr>
+<td>Jump shots allowed</td>
+<td>No</td>
+<td>No</td>
+<td><strong>Yes</strong></td>
+</tr>
+<tr>
+<td>Why</td>
+<td>Low-SL players can&#39;t control jump shots (table damage risk for the house); high-SL players who can jump gain an unfair advantage</td>
+<td>—</td>
+<td>Competitive-only division; players must acknowledge this</td>
+</tr>
+</tbody></table></div>
+<p>Implementation: <code>divisions.format ∈ {EIGHT_BALL, NINE_BALL, MASTER}</code> drives which scoring engine, race calculator and cap validator are used (strategy pattern; see <a href="10-backend-design.html">10-backend-design.md</a>).</p>
+<h2 id="3-membership-eligibility-and-rosters"><span class="secnum">4.3</span> Membership, eligibility and rosters</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Rule</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>R-010 <span class="badge b-confirmed">Confirmed</span></td>
+<td>Every player has one permanent <strong>Member ID</strong> (see §11). SL and stats follow the Member ID across all teams and divisions.</td>
+</tr>
+<tr>
+<td>R-011 <span class="badge b-confirmed">Confirmed</span></td>
+<td><strong>Single-roster rule:</strong> a player can&#39;t be on more than <strong>one team in the same division</strong> in the same session. This is a hard DB constraint.</td>
+</tr>
+<tr>
+<td>R-012 <span class="badge b-confirmed">Confirmed</span></td>
+<td>Same night, <strong>different divisions</strong>: allowed only if the League Operator&#39;s bylaw <code>allow_multi_division_same_night = true</code> (per league or per division). Default <code>false</code>.</td>
+</tr>
+<tr>
+<td>R-013 <span class="badge b-confirmed">Confirmed</span></td>
+<td>Different nights, or different formats (8-Ball vs 9-Ball): always allowed. Team standings and division points stay independent.</td>
+</tr>
+<tr>
+<td>R-014 <span class="badge b-confirmed">Confirmed</span></td>
+<td>Annual membership must be paid before a player plays. Unpaid status shows on the roster (scoresheet shows <code>$25</code> / <code>$$</code> flags). The fee amount is configurable per league (VN target 100–150k VND/year).</td>
+</tr>
+<tr>
+<td>R-015 <span class="badge b-confirmed">Confirmed</span></td>
+<td>Weekly match fee per player per match played (VN target 50–80k VND). On a <strong>forfeit</strong>, both teams still pay full weekly fees.</td>
+</tr>
+<tr>
+<td>R-016 <span class="badge b-confirmed">Confirmed</span></td>
+<td>Roster changes are allowed during the <strong>first 4 weeks</strong> of a session. After that, an LO approval is required.</td>
+</tr>
+<tr>
+<td>R-017 <span class="badge b-confirmed">Confirmed</span></td>
+<td>A <strong>Captain</strong> can add an existing, paid member who is available in that division to the team <strong>before the first match of the night starts</strong>.</td>
+</tr>
+<tr>
+<td>R-018 <span class="badge b-confirmed">Confirmed</span></td>
+<td>Creating a <strong>brand-new player</strong> on the spot (name, Member ID, initial SL) is <strong>admin/LO-only</strong>.</td>
+</tr>
+<tr>
+<td>R-019 <span class="badge b-confirmed">Confirmed</span></td>
+<td>New players start at <strong>SL 3</strong> for 8-Ball, unless the LO sets otherwise. <span class="badge b-assumption">Assumption</span> 9-Ball starting SL is not specified; default 3, LO-configurable.</td>
+</tr>
+<tr>
+<td>R-020 <span class="badge b-confirmed">Confirmed</span></td>
+<td>Admin can <strong>transfer</strong> players between teams in the same league or across divisions. R-011 is still enforced.</td>
+</tr>
+</tbody></table></div>
+<h2 id="4-team-night-flow"><span class="secnum">4.4</span> Team night flow</h2>
+<blockquote>
+<p><strong>Phase 1 (MVP)</strong> skips the coin flip, the lag and live scoring. Home puts up first in match 1 and the sides alternate. After each match the captain enters the final games, innings and defensive shots, and the night is submitted by a captain (no dual verification). The diagram below is the <strong>full target flow</strong> (Phase 2).</p>
+</blockquote>
+<figure class="diagram"><a class="diagram-img" href="assets/diagrams/04-domain-rules-2.svg" target="_blank" aria-label="Open diagram full screen"><img src="assets/diagrams/04-domain-rules-2.svg" alt="Diagram: 04 - Domain Rules Specification" loading="lazy" data-diagram-file="04-domain-rules-2.svg" width="1104" height="990"></a><figcaption><span></span><a class="full" href="assets/diagrams/04-domain-rules-2.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Rule</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>R-030 <span class="badge b-confirmed">Confirmed</span></td>
+<td><strong>Coin flip:</strong> the winning team chooses to (a) put up its player first, or (b) make the opponent put up first.</td>
+</tr>
+<tr>
+<td>R-031 <span class="badge b-confirmed">Confirmed</span></td>
+<td>After Match 1, put-up order <strong>alternates</strong> between teams.</td>
+</tr>
+<tr>
+<td>R-032 <span class="badge b-confirmed">Confirmed</span></td>
+<td><strong>Lag:</strong> in each individual match, the lag winner decides who breaks the first rack. The <code>LAG</code> badge is shown next to that player. Re-lag if both lags foul or the result is undeterminable. The app records only the outcome.</td>
+</tr>
+<tr>
+<td>R-033 <span class="badge b-assumption">Assumption</span></td>
+<td>Break order after rack 1: <strong>winner breaks</strong> (APA 8-Ball/9-Ball default). Configurable per division bylaw (<code>break_rule ∈ {WINNER, ALTERNATE}</code>).</td>
+</tr>
+<tr>
+<td>R-034 <span class="badge b-confirmed">Confirmed</span></td>
+<td><strong>23-SL cap:</strong> across the 5 players a team uses in one team match, <code>Σ SL ≤ 23</code> (8-Ball and 9-Ball; not Master). The UI shows <code>x/23 Total SL</code> live and blocks a selection that would make it impossible to complete the lineup within the cap.</td>
+</tr>
+<tr>
+<td class="nw">R-035</td>
+<td>Cap validation rule (derived): when choosing the k-th player, valid only if <code>usedSL + sl(candidate) + minSL(remaining eligible roster, 5−k players) ≤ 23</code>.</td>
+</tr>
+<tr>
+<td>R-036 <span class="badge b-confirmed">Confirmed</span></td>
+<td>A player plays at most one individual match per team match.</td>
+</tr>
+<tr>
+<td>R-037 <span class="badge b-confirmed">Confirmed</span></td>
+<td><strong>Forfeit:</strong> if a team cannot field a player for a slot, that match is forfeited and the opponent receives the maximum points for that match (8-Ball: 3; 9-Ball: 20 <span class="badge b-assumption">Assumption</span>). Recorded as <code>forfeit=true</code>, no racks.</td>
+</tr>
+</tbody></table></div>
+<h2 id="5-8-ball-rules"><span class="secnum">4.5</span> 8-Ball rules</h2>
+<h3 id="51-race-chart-games-needed"><span class="secnum">4.5.1</span> Race chart (games needed)</h3>
+<p>Read as <strong>row player needs / column player needs</strong>. SL range 2–7.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Row \ Col</th>
+<th>SL2</th>
+<th>SL3</th>
+<th>SL4</th>
+<th>SL5</th>
+<th>SL6</th>
+<th>SL7</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>SL2</strong></td>
+<td>2/2</td>
+<td>2/3</td>
+<td>2/4</td>
+<td>2/5</td>
+<td>2/6</td>
+<td>2/7</td>
+</tr>
+<tr>
+<td><strong>SL3</strong></td>
+<td>3/2</td>
+<td>2/2</td>
+<td>2/3</td>
+<td>2/4</td>
+<td>2/5</td>
+<td>2/6</td>
+</tr>
+<tr>
+<td><strong>SL4</strong></td>
+<td>4/2</td>
+<td>3/2</td>
+<td>3/3</td>
+<td>3/4</td>
+<td>3/5</td>
+<td>2/5</td>
+</tr>
+<tr>
+<td><strong>SL5</strong></td>
+<td>5/2</td>
+<td>4/2</td>
+<td>4/3</td>
+<td>4/4</td>
+<td>4/5</td>
+<td>3/5</td>
+</tr>
+<tr>
+<td><strong>SL6</strong></td>
+<td>6/2</td>
+<td>5/2</td>
+<td>5/3 <span class="badge b-corrected">Corrected</span></td>
+<td>5/4</td>
+<td>5/5</td>
+<td>4/5</td>
+</tr>
+<tr>
+<td><strong>SL7</strong></td>
+<td>7/2</td>
+<td>6/2</td>
+<td>5/2</td>
+<td>5/3</td>
+<td>5/4</td>
+<td>5/5</td>
+</tr>
+</tbody></table></div>
+<p><span class="badge b-corrected">Corrected</span> The Notion table shows <code>SL6 vs SL4 = 5/6</code>, which contradicts its mirror cell <code>SL4 vs SL6 = 3/5</code>. It is corrected to <strong>5/3</strong> (matches the APA chart).</p>
+<p><strong>Invariant (test):</strong> <code>race(a,b) == reverse(race(b,a))</code> for all pairs.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Rule</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>R-050 <span class="badge b-confirmed">Confirmed</span></td>
+<td>When an SL changes (admin action), races are recomputed <strong>for matches not yet started</strong>. An in-progress or finished match keeps the SL snapshot it started with.</td>
+</tr>
+</tbody></table></div>
+<h3 id="52-rack-outcomes"><span class="secnum">4.5.2</span> Rack outcomes</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Code</th>
+<th>Button label</th>
+<th>Result for shooter</th>
+<th>Accolade</th>
+<th>Condition</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>MAKE_8</code></td>
+<td>Make 8 Ball</td>
+<td><strong>WIN</strong></td>
+<td>—</td>
+<td>Legally pockets the 8 in the called pocket after clearing the group</td>
+</tr>
+<tr>
+<td><code>BREAK_AND_RUN</code></td>
+<td>Break and Run</td>
+<td><strong>WIN</strong></td>
+<td>BR</td>
+<td>Breaker wins the rack <strong>without the opponent getting a turn</strong></td>
+</tr>
+<tr>
+<td><code>EIGHT_ON_BREAK</code></td>
+<td>8 on the Break</td>
+<td><strong>WIN</strong></td>
+<td>8OB</td>
+<td>8 pocketed on the break shot without scratching</td>
+</tr>
+<tr>
+<td><code>EARLY_8</code></td>
+<td>Make 8 Ball Early</td>
+<td><strong>LOSS</strong></td>
+<td class="nw">E8</td>
+<td>8 pocketed before own group is cleared</td>
+</tr>
+<tr>
+<td><code>SCRATCH_8</code></td>
+<td>Scratch on 8 Ball</td>
+<td><strong>LOSS</strong></td>
+<td class="nw">S8</td>
+<td>8 pocketed but cue ball scratches / leaves the table</td>
+</tr>
+<tr>
+<td><code>WRONG_POCKET_8</code></td>
+<td>Make 8 Ball Wrong Pocket</td>
+<td><strong>LOSS</strong></td>
+<td>8WP</td>
+<td>8 pocketed in an un-called pocket</td>
+</tr>
+</tbody></table></div>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Rule</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>R-060 <span class="badge b-confirmed">Confirmed</span></td>
+<td><code>BREAK_AND_RUN</code> and <code>EIGHT_ON_BREAK</code> are <strong>only offered</strong> while the breaker&#39;s first turn of the rack is still live (no turn-over yet in this rack). After the first turn-over, the UI hides them.</td>
+</tr>
+<tr>
+<td>R-061 <span class="badge b-confirmed">Confirmed</span></td>
+<td>A LOSS outcome awards +1 game won to the <strong>opponent</strong> of the shooter.</td>
+</tr>
+<tr>
+<td class="nw">R-062</td>
+<td>The &quot;shooter&quot; for the end-rack action is the <strong>active player</strong> in the live state. The scorekeeper can switch the active player via the overflow menu (correction).</td>
+</tr>
+</tbody></table></div>
+<h3 id="53-8-ball-points-per-individual-match-3-point-system"><span class="secnum">4.5.3</span> 8-Ball points per individual match (3-point system)</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Outcome</th>
+<th>Winner pts</th>
+<th>Loser pts</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Shutout — loser won <strong>0</strong> games</td>
+<td><strong>3</strong></td>
+<td>0</td>
+</tr>
+<tr>
+<td>Standard win — loser won ≥ 1 game but <strong>not on the hill</strong></td>
+<td><strong>2</strong></td>
+<td>0</td>
+</tr>
+<tr>
+<td>Hill-hill — loser <strong>on the hill</strong> (1 game short of their race)</td>
+<td><strong>2</strong></td>
+<td><strong>1</strong></td>
+</tr>
+</tbody></table></div>
+<div class="code"><span class="code-lang">text</span><button class="copy" type="button">Copy</button><pre><code class="lang-text">points8(winnerGW, loserGW, loserGN):
+  if loserGW == 0           -&gt; (3, 0)
+  if loserGW == loserGN - 1 -&gt; (2, 1)   # on the hill
+  else                      -&gt; (2, 0)</code></pre></div>
+<p>Edge case: if <code>loserGN == 2</code> and <code>loserGW == 1</code>, the loser is both &quot;won ≥ 1&quot; and &quot;on the hill&quot;, so the result is <strong>(2, 1)</strong>. The hill check takes precedence over the standard-win check.</p>
+<p>A match therefore totals <strong>3, 3 or 2</strong> points, not always 3. The planned <code>fn_score_individual_match()</code> and the FE <code>pointsFor()</code> both implement hill = <code>race − 1</code>. One example in the original kickoff prompt (&quot;4–2 when loser race 5 = 2/1&quot;) contradicts this and is treated as a typo.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Rule</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>R-070 <span class="badge b-confirmed">Confirmed</span></td>
+<td>Maximum team points per night (8-Ball) = 5 × 3 = <strong>15</strong>, plus the verification bonus (R-110).</td>
+</tr>
+<tr>
+<td>R-071 <span class="badge b-confirmed">Confirmed</span></td>
+<td><strong>PA (Points Available)</strong> for 8-Ball = 3 per match played.</td>
+</tr>
+</tbody></table></div>
+<h2 id="6-9-ball-rules"><span class="secnum">4.6</span> 9-Ball rules</h2>
+<h3 id="61-ball-values-and-targets"><span class="secnum">4.6.1</span> Ball values and targets</h3>
+<ul>
+<li>Balls 1–8 = <strong>1 point</strong> each. The 9-ball = <strong>2 points</strong>. Each rack totals <strong>10</strong> (counting dead balls).</li>
+<li>Target points by SL:</li>
+</ul>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>SL</th>
+<th>1</th>
+<th>2</th>
+<th>3</th>
+<th>4</th>
+<th>5</th>
+<th>6</th>
+<th>7</th>
+<th>8</th>
+<th>9</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Target</td>
+<td>14</td>
+<td>19</td>
+<td>25</td>
+<td>31</td>
+<td>38</td>
+<td>46</td>
+<td>55</td>
+<td>65</td>
+<td>75</td>
+</tr>
+</tbody></table></div>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Rule</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>R-080 <span class="badge b-confirmed">Confirmed</span></td>
+<td>Points are attributed to the <strong>active shooter</strong> when a ball is legally pocketed.</td>
+</tr>
+<tr>
+<td>R-081 <span class="badge b-confirmed">Confirmed</span></td>
+<td><strong>Dead balls (DB):</strong> balls pocketed on a foul (scratch, cue ball off table, illegal shot) count for <strong>neither</strong> player and are logged as DB so that <code>Σ(points A + points B + dead) == 10</code> per completed rack.</td>
+</tr>
+<tr>
+<td>R-082 <span class="badge b-confirmed">Confirmed</span></td>
+<td>The <strong>9-ball is never a dead ball</strong>. If pocketed on a foul, it is re-spotted (foot spot, or as close as possible). The app records nothing for that event apart from the foul.</td>
+</tr>
+<tr>
+<td>R-083 <span class="badge b-confirmed">Confirmed</span></td>
+<td>The match ends as soon as a player reaches their target. <strong>Recorded score is capped at the target</strong> (e.g. SL5 at 37 who makes the 9 on the break records 38, not 39).</td>
+</tr>
+<tr>
+<td>R-084 <span class="badge b-confirmed">Confirmed</span></td>
+<td><strong>9OB</strong> (9 on the break) and <strong>BR</strong> (break and run) are recorded as accolades. The ball points still count.</td>
+</tr>
+<tr>
+<td>R-085 <span class="badge b-confirmed">Confirmed</span></td>
+<td>Rack-close validation: a rack can be closed only when the 9-ball has been credited, i.e. the remaining unaccounted balls are auto-marked dead with confirmation.</td>
+</tr>
+</tbody></table></div>
+<h3 id="62-team-points-20-point-split"><span class="secnum">4.6.2</span> Team points (20-point split)</h3>
+<p>The winner gets <code>20 − loserPts</code>. The loser&#39;s points are looked up from the <strong>loser&#39;s SL</strong> and the <strong>loser&#39;s match score</strong>.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Loser SL</th>
+<th>20-0</th>
+<th>19-1</th>
+<th>18-2</th>
+<th>17-3</th>
+<th>16-4</th>
+<th>15-5</th>
+<th>14-6</th>
+<th>13-7</th>
+<th>12-8</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1</td>
+<td>0–2</td>
+<td>3</td>
+<td>4</td>
+<td>5–6</td>
+<td>7</td>
+<td>8</td>
+<td>9–10</td>
+<td>11</td>
+<td>12–13</td>
+</tr>
+<tr>
+<td>2</td>
+<td>0–3</td>
+<td>4–5</td>
+<td>6–7</td>
+<td>8</td>
+<td>9–10</td>
+<td>11–12</td>
+<td>13–14</td>
+<td>15–16</td>
+<td>17–18</td>
+</tr>
+<tr>
+<td>3</td>
+<td>0–4</td>
+<td>5–6</td>
+<td>7–9</td>
+<td>10–11</td>
+<td>12–14</td>
+<td>15–16</td>
+<td>17–19</td>
+<td>20–21</td>
+<td>22–24 <span class="badge b-corrected">Corrected</span></td>
+</tr>
+<tr>
+<td>4</td>
+<td>0–5</td>
+<td>6–8</td>
+<td>9–11</td>
+<td>12–14</td>
+<td>15–18</td>
+<td>19–21</td>
+<td>22–24</td>
+<td>25–27</td>
+<td>28–30</td>
+</tr>
+<tr>
+<td>5</td>
+<td>0–6</td>
+<td>7–10</td>
+<td>11–14</td>
+<td>15–18</td>
+<td>19–22</td>
+<td>23–26</td>
+<td>27–29</td>
+<td>30–33</td>
+<td>34–37</td>
+</tr>
+<tr>
+<td>6</td>
+<td>0–8</td>
+<td>9–12</td>
+<td>13–17</td>
+<td>18–22</td>
+<td>23–27</td>
+<td>28–31</td>
+<td>32–36</td>
+<td>37–40</td>
+<td>41–45</td>
+</tr>
+<tr>
+<td>7</td>
+<td>0–10</td>
+<td>11–15</td>
+<td>16–21</td>
+<td>22–26</td>
+<td>27–32</td>
+<td>33–37</td>
+<td>38–43</td>
+<td>44–49</td>
+<td>50–54</td>
+</tr>
+<tr>
+<td>8</td>
+<td>0–13</td>
+<td>14–19</td>
+<td>20–26</td>
+<td>27–32</td>
+<td>33–39</td>
+<td>40–45</td>
+<td>46–52</td>
+<td>53–58</td>
+<td>59–64</td>
+</tr>
+<tr>
+<td>9</td>
+<td>0–17</td>
+<td>18–24</td>
+<td>25–31</td>
+<td>32–38</td>
+<td>39–46</td>
+<td>47–53</td>
+<td>54–60</td>
+<td>61–67</td>
+<td>68–74</td>
+</tr>
+</tbody></table></div>
+<p><span class="badge b-corrected">Corrected</span> The APA flyer prints <code>23&amp;24</code> for SL3 at 12-8, which leaves 22 unmapped. The Notion value <code>22–24</code> is adopted (contiguous).</p>
+<p><strong>Invariants (tests):</strong></p>
+<ul>
+<li>Each row covers <code>0 … target−1</code> contiguously with no gaps or overlaps.</li>
+<li>The upper bound of the 12-8 column equals <code>target(SL) − 1</code>.</li>
+</ul>
+<p>Worked example (from the APA flyer): the loser is SL3 with 21 points → column 13-7 → loser gets <strong>7</strong>, winner <strong>13</strong>.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Rule</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>R-090 <span class="badge b-confirmed">Confirmed</span></td>
+<td>Max team points per night (9-Ball) = 5 × 20 = <strong>100</strong>, plus the verification bonus.</td>
+</tr>
+<tr>
+<td>R-091 <span class="badge b-confirmed">Confirmed</span></td>
+<td>PA for 9-Ball = 20 per match played.</td>
+</tr>
+</tbody></table></div>
+<h2 id="7-innings-defensive-shots-timeouts"><span class="secnum">4.7</span> Innings, defensive shots, timeouts</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Rule</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>R-100 <span class="badge b-confirmed">Confirmed</span></td>
+<td>An <strong>inning</strong> = one turn by each player. The counter increments when the player who <strong>lost the lag</strong> (i.e. the second shooter of the match) completes their turn. In the app this is triggered by <strong>Turn Over</strong> on that player.</td>
+</tr>
+<tr>
+<td>R-101 <span class="badge b-confirmed">Confirmed</span></td>
+<td><strong>Turn Over</strong> is tapped when the shooter fails to pocket a legal ball (or otherwise ends their turn). It switches the active player.</td>
+</tr>
+<tr>
+<td>R-102 <span class="badge b-confirmed">Confirmed</span></td>
+<td><strong>Defensive Shot (DS)</strong>: any shot with no intent to legally pocket a ball. A DS is recorded <strong>per player</strong>; a DS is also a turn end (app action: <code>DS</code> implies <code>TURN_OVER</code>). <span class="badge b-assumption">Assumption</span> The UI keeps them as separate buttons (as in APA). Pressing DS increments the counter and ends the turn.</td>
+</tr>
+<tr>
+<td>R-103 <span class="badge b-confirmed">Confirmed</span></td>
+<td>At the end of a match each player&#39;s total DS is shown. Zero renders as &quot;No DS&quot;.</td>
+</tr>
+<tr>
+<td>R-104 <span class="badge b-assumption">Assumption</span></td>
+<td><strong>Timeouts per rack:</strong> SL ≤ 3 → 2; SL ≥ 4 → 1 (8-Ball). 9-Ball: SL ≤ 3 → 2; SL ≥ 4 → 1. Not in the sources; this is the APA default and is configurable per division bylaw. The UI shows <code>N time-outs left</code>.</td>
+</tr>
+<tr>
+<td>R-105 <span class="badge b-confirmed">Confirmed</span></td>
+<td>The scorekeeper/referee name is recorded per individual match.</td>
+</tr>
+<tr>
+<td class="nw">R-106</td>
+<td>The shot clock on Screen 5 (<code>7 sec</code>) is <strong>informational only</strong> (elapsed time since the turn started). No enforcement in Phase 1.</td>
+</tr>
+</tbody></table></div>
+<h2 id="8-score-matching-verification-and-bonus"><span class="secnum">4.8</span> Score matching (verification) and bonus</h2>
+<blockquote>
+<p><span class="badge b-target">Target</span><strong>Phase 2.</strong> The MVP uses <code>team_matches.status</code>: <code>scheduled → in_progress → submitted</code>. A captain of either team (or an admin) submits once all 5 matches are complete, and admins may still edit afterwards. Who exactly may submit is an open question (<a href="14-open-questions.html">Q30</a>).</p>
+</blockquote>
+<figure class="diagram"><a class="diagram-img" href="assets/diagrams/04-domain-rules-3.svg" target="_blank" aria-label="Open diagram full screen"><img src="assets/diagrams/04-domain-rules-3.svg" alt="Diagram: 04 - Domain Rules Specification" loading="lazy" data-diagram-file="04-domain-rules-3.svg" width="612" height="468"></a><figcaption><span></span><a class="full" href="assets/diagrams/04-domain-rules-3.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Rule</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>R-110 <span class="badge b-confirmed">Confirmed</span></td>
+<td>Both teams must review and confirm the night&#39;s records. When both confirm <strong>matching</strong> records, <strong>each</strong> team receives a standings bonus: <strong>+1 (8-Ball)</strong>, <strong>+10 (9-Ball)</strong>.</td>
+</tr>
+<tr>
+<td class="nw">R-111</td>
+<td>With a single shared scoring device (MVP), &quot;matching&quot; means both captains confirm the same snapshot hash. With two devices (Phase 2), each team submits its own record set and the server diffs them field by field (GW, points, innings, DS, outcome codes).</td>
+</tr>
+<tr>
+<td>R-112 <span class="badge b-assumption">Assumption</span></td>
+<td>Verification window: <strong>24 h</strong> after the team match ends (configurable). After it expires, the match finalizes <strong>without bonus</strong>.</td>
+</tr>
+<tr>
+<td>R-113 <span class="badge b-confirmed">Confirmed</span></td>
+<td>Mismatches create a <strong>Dispute</strong> that the LO resolves in the admin portal. The resolution is audited and the bonus is withheld unless the LO grants it.</td>
+</tr>
+</tbody></table></div>
+<h2 id="9-accolades-and-achievements"><span class="secnum">4.9</span> Accolades and achievements</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Code</th>
+<th>Name</th>
+<th>Format</th>
+<th>Rule</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>BR</code></td>
+<td>Break and Run</td>
+<td>8B, 9B</td>
+<td>Breaker runs out the rack without the opponent getting a turn</td>
+</tr>
+<tr>
+<td><code>8OB</code></td>
+<td>8 on the Break (Golden Break)</td>
+<td>8B</td>
+<td>Legal break that pockets the 8 = instant rack win</td>
+</tr>
+<tr>
+<td><code>9OB</code></td>
+<td>9 on the Break (Golden Break)</td>
+<td>9B</td>
+<td>Legal break that pockets the 9</td>
+</tr>
+<tr>
+<td><code>RACKLESS</code></td>
+<td>Rackless match</td>
+<td>8B</td>
+<td>Won the lag and the match <strong>without losing a single rack</strong></td>
+</tr>
+<tr>
+<td><code>DOUBLE_STRIKE</code></td>
+<td>Double-strike (Cú Đúp)</td>
+<td>8B, 9B, Master</td>
+<td><strong>BR + Golden break on the same league night</strong> (replaces APA &quot;mini-slam&quot;). See <a href="14-open-questions.html">open question Q5</a>.</td>
+</tr>
+</tbody></table></div>
+<p>Accolades are derived by the server from rack events and stored in <code>player_accolades</code> for profile counters.</p>
+<h2 id="10-skill-level-handicap-management"><span class="secnum">4.10</span> Skill level (handicap) management</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Rule</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>R-120 <span class="badge b-confirmed">Confirmed</span></td>
+<td>The LO can <strong>manually set</strong> a player&#39;s SL per format at any time. Every change is written to <code>player_skill_levels</code> (history) and to <code>audit_log</code> with the reason.</td>
+</tr>
+<tr>
+<td>R-121 <span class="badge b-confirmed">Confirmed</span></td>
+<td>8-Ball SL basis: <strong>average effective innings per won game over the last 10 won games</strong>, where <code>effective innings = innings − defensive shots</code>.</td>
+</tr>
+<tr>
+<td>R-122 <span class="badge b-confirmed">Confirmed</span></td>
+<td>9-Ball SL basis: <strong>PPI = points ÷ (innings − DS)</strong> over a rolling window <span class="badge b-assumption">Assumption</span> (window size TBD; default the last 10 matches).</td>
+</tr>
+<tr>
+<td>R-123 <span class="badge b-assumption">Assumption</span></td>
+<td>Mapping thresholds (innings → SL, PPI → SL) are <strong>not in the sources</strong>. Phase 1: manual SL only; the system <strong>computes and displays the suggested SL</strong> to the LO. Phase 2: auto-apply with LO approval.</td>
+</tr>
+<tr>
+<td>R-124 <span class="badge b-confirmed">Confirmed</span></td>
+<td><strong>Anti-sandbagging:</strong> DS tracking feeds the effective-innings calculation. Phase 3: statistical anomaly flags (sudden PPI drop, DS ratio outliers, innings-per-win variance) appear in an LO review queue.</td>
+</tr>
+<tr>
+<td class="nw">R-125</td>
+<td>The SL used in a match is <strong>snapshotted</strong> on <code>individual_matches</code> at creation. Later changes never rewrite history.</td>
+</tr>
+<tr>
+<td class="nw">R-126</td>
+<td>The roster shows the SL <strong>for that session</strong> (<code>team_rosters.sl_snapshot</code>, updated when the SL changes during the session).</td>
+</tr>
+</tbody></table></div>
+<h2 id="11-identifier-generation"><span class="secnum">4.11</span> Identifier generation</h2>
+<blockquote>
+<p><span class="badge b-built">Built</span><strong>As-built:</strong> <code>players.member_id</code> and <code>teams.team_number</code> are free TEXT columns entered by an admin. The seed uses APA-style values (<code>95007620</code>, <code>03209</code>), and the FE assumes 8-digit member IDs (<code>MEMBER_ID_LENGTH = 8</code>). The generators below are the <span class="badge b-target">Target</span> Phase 2 target. Until then, admins must enter IDs that follow these formats (<a href="14-open-questions.html">Q2/Q3</a>).</p>
+</blockquote>
+<h3 id="111-member-id-8-digits-yymmnnnn"><span class="secnum">4.11.1</span> Member ID (8 digits): <code>YYMMNNNN</code></h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Part</th>
+<th>Meaning</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>YY</code></td>
+<td>2-digit registration year</td>
+<td><code>26</code></td>
+</tr>
+<tr>
+<td><code>MM</code></td>
+<td>2-digit registration month</td>
+<td><code>11</code></td>
+</tr>
+<tr>
+<td><code>NNNN</code></td>
+<td>Sequence within that month, zero-padded, from 0001</td>
+<td><code>0042</code></td>
+</tr>
+</tbody></table></div>
+<p>Example: the 42nd player registered in Nov 2026 gets <code>26110042</code>. Capacity is 9,999 per month.</p>
+<p>Implementation: a Postgres table <code>id_sequences(scope text primary key, last_value int)</code> with <code>UPDATE … RETURNING</code> in the same transaction as the insert (gap-free, concurrency-safe). The scope key is <code>member:2611</code>.</p>
+<h3 id="112-team-id-5-digits-rrvvt"><span class="secnum">4.11.2</span> Team ID (5 digits): <code>RRVVT</code></h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Part</th>
+<th>Meaning</th>
+<th>Rule</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>RR</code></td>
+<td>Region code (2 digits)</td>
+<td>Derived from the host venue&#39;s district/postal region. The mapping table is managed by the admin. See <a href="14-open-questions.html">Q3</a>.</td>
+</tr>
+<tr>
+<td><code>VV</code></td>
+<td>Host venue code (2 digits)</td>
+<td>Unique <strong>within</strong> the region</td>
+</tr>
+<tr>
+<td><code>T</code></td>
+<td>Team sequence at that venue code</td>
+<td>0–9</td>
+</tr>
+</tbody></table></div>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Rule</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>R-130 <span class="badge b-confirmed">Confirmed</span></td>
+<td>All IDs are numeric only. Letters are used only if the numeric space is exhausted.</td>
+</tr>
+<tr>
+<td>R-131 <span class="badge b-confirmed">Confirmed</span></td>
+<td>A venue code holds <strong>max 10 teams</strong> (T = 0..9). When full, the venue is assigned an <strong>additional venue code</strong> (<code>venue_codes</code> 1-to-many), and new teams use the new code.</td>
+</tr>
+<tr>
+<td class="nw">R-132</td>
+<td>Display IDs (<code>member_no</code>, <code>team_no</code>) are <strong>immutable business keys</strong>. All foreign keys use UUID surrogate keys.</td>
+</tr>
+</tbody></table></div>
+<h2 id="12-statistics-and-profile-metrics"><span class="secnum">4.12</span> Statistics and profile metrics</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Metric</th>
+<th>Formula</th>
+<th>Scope</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Matches Played (MP)</td>
+<td>count(individual matches actually played). Forfeits are excluded <span class="badge b-assumption">Assumption</span></td>
+<td>session, lifetime, format</td>
+</tr>
+<tr>
+<td>Matches Won (MW)</td>
+<td>count(matches won)</td>
+<td>session, lifetime</td>
+</tr>
+<tr>
+<td>Win %</td>
+<td><code>MW / MP × 100</code> (2 decimals)</td>
+<td>session, lifetime</td>
+</tr>
+<tr>
+<td>Total points</td>
+<td>Σ team points earned</td>
+<td>session</td>
+</tr>
+<tr>
+<td>PPM (points per match)</td>
+<td><code>total points / MP</code></td>
+<td>session</td>
+</tr>
+<tr>
+<td>% Points Available</td>
+<td><code>total points / (MP × PA)</code>, where PA = 3 (8B) or 20 (9B)</td>
+<td>session</td>
+</tr>
+<tr>
+<td>Defensive shot avg</td>
+<td><code>Σ DS / MP</code></td>
+<td>lifetime</td>
+</tr>
+<tr>
+<td>Matches in last 2 years</td>
+<td>count where <code>played_at ≥ now − 2y</code></td>
+<td>lifetime</td>
+</tr>
+<tr>
+<td>BR / 8OB / 9OB / Rackless / Double-strike</td>
+<td>count(accolades)</td>
+<td>session, lifetime</td>
+</tr>
+<tr>
+<td>Last date played</td>
+<td>max(played_at)</td>
+<td>lifetime</td>
+</tr>
+<tr>
+<td>Championship lowest attainable SL <span class="badge b-assumption">Assumption</span></td>
+<td>Lowest SL the player has held over the past N sessions, used for tournament eligibility (defined in Phase 3)</td>
+<td>lifetime</td>
+</tr>
+</tbody></table></div>
+<p>Profile example check (from the screenshot): session 3 won / 7 played → 42.86%. Total points 7 → PPM = 1. PA = 7 × 3 = 21 → 7/21 = 33%. <span class="badge b-yes">Yes</span> Consistent with these formulas.</p>
+<h2 id="13-schedule-and-results-presentation-rules"><span class="secnum">4.13</span> Schedule and results presentation rules</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Rule</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>R-140 <span class="badge b-confirmed">Confirmed</span></td>
+<td>Completed match card: <strong>green</strong> for the winning team, showing the final score <code>13 - 1</code>. Clicking it opens the match breakdown.</td>
+</tr>
+<tr>
+<td>R-141 <span class="badge b-confirmed">Confirmed</span></td>
+<td>Upcoming match card: <strong>blue</strong> date (<code>Jul 22</code>), score hidden, start time shown (<code>@ 7:00 PM</code>).</td>
+</tr>
+<tr>
+<td>R-142 <span class="badge b-confirmed">Confirmed</span></td>
+<td>Bye / No Play: neutral, non-clickable banner.</td>
+</tr>
+<tr>
+<td>R-143 <span class="badge b-confirmed">Confirmed</span></td>
+<td>Every card shows Team A vs Team B, venue name, venue address and date.</td>
+</tr>
+<tr>
+<td>R-144 <span class="badge b-confirmed">Confirmed</span></td>
+<td>Match breakdown: header with team totals and a crown on the winning team. Five match blocks, each with player name, SL, LAG badge, and GW/GN (8-Ball, e.g. <code>4/4 – 1/4</code>) or points/target (9-Ball). The winner&#39;s card is solid green with points earned; the loser&#39;s is gray.</td>
+</tr>
+<tr>
+<td>R-145 <span class="badge b-confirmed">Confirmed</span></td>
+<td>All matches must be queryable by team and sorted by start date (public info: opponent team name, final score, date and location).</td>
+</tr>
+</tbody></table></div>
+
+</article>
+</main>
+<script src="assets/site-data.js"></script>
+<script src="assets/layout.js"></script>
+<script src="assets/search-index.js"></script>
+<script src="assets/site.js"></script>
+</body>
+</html>

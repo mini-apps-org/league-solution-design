@@ -1,0 +1,386 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>24 - Payments &amp; Notifications · MViP Solution Design</title>
+<link rel="stylesheet" href="../assets/site.css">
+<script src="../assets/boot.js"></script>
+</head>
+<body data-root="../" data-page="features/E11-payments-notifications.html">
+<main id="main" class="content">
+<article class="doc">
+<h1>24 - Payments &amp; Notifications</h1>
+<p class="lede">Epic E11 · 2 features</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Goal</strong></td>
+<td>Collect membership and weekly fees through the wallets Vietnamese players already use, and reach players where they already are (Zalo)</td>
+</tr>
+<tr>
+<td><strong>Phase</strong></td>
+<td>2</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><span class="badge b-target">Target</span> Not started. Phase 1 has only a manual <code>paid</code> flag on membership, set by an admin, which gates put-up and roster adds</td>
+</tr>
+<tr>
+<td><strong>Actors</strong></td>
+<td>Player, Captain, Admin, MoMo / ZaloPay, Zalo Official Account</td>
+</tr>
+<tr>
+<td><strong>Related</strong></td>
+<td><a href="../04-domain-rules.html">04 §3</a> · <a href="../11-security-and-roles.html">11 security</a> · <a href="E06-platform-delivery.html#f42">E06-F42 worker</a></td>
+</tr>
+</tbody></table></div>
+<h2 id="features-by-phase"><span class="secnum">24.1</span> Features by phase</h2>
+<h3 id="phase-1"><span class="secnum">24.1.1</span> Phase 1</h3>
+<p>A manual paid flag. An admin marks a membership paid after cash or bank transfer, and unpaid players can&#39;t be put up.</p>
+<h3 id="phase-2"><span class="secnum">24.1.2</span> Phase 2</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>Feature</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">F36</td>
+<td><a href="E11-payments-notifications.html#f36">Fees with MoMo / ZaloPay</a></td>
+<td><span class="badge b-target">Target</span></td>
+</tr>
+<tr>
+<td class="nw">F40</td>
+<td><a href="E11-payments-notifications.html#f40">Notifications</a></td>
+<td><span class="badge b-target">Target</span></td>
+</tr>
+</tbody></table></div>
+<h2 id="phase-2-deep-dive"><span class="secnum">24.2</span> Phase 2 deep dive</h2>
+<h3 id="components"><span class="secnum">24.2.1</span> Components</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E11-payments-notifications-1.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E11-payments-notifications-1.svg" alt="Diagram: 24 - Payments &amp; Notifications" loading="lazy" data-diagram-file="features_E11-payments-notifications-1.svg" width="2001" height="647"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_E11-payments-notifications-1.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="money-and-message-path-for-one-night"><span class="secnum">24.2.2</span> Money and message path for one night</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E11-payments-notifications-2.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E11-payments-notifications-2.svg" alt="Diagram: 24 - Payments &amp; Notifications" loading="lazy" data-diagram-file="features_E11-payments-notifications-2.svg" width="1594" height="597"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_E11-payments-notifications-2.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="data-delta"><span class="secnum">24.2.3</span> Data delta</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Object</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>`fee_schedules (division_id, kind membership</td>
+<td>weekly, amount_vnd, due_rule)`</td>
+</tr>
+<tr>
+<td>`fee_charges (id, player_id, team_match_id NULL, kind, amount_vnd, status open</td>
+<td>paid</td>
+</tr>
+<tr>
+<td><code>payments (id, provider, provider_order_id UNIQUE, amount_vnd, status, raw jsonb, charge_ids uuid[])</code></td>
+<td>What&#39;s paid; the webhook is idempotent on <code>provider_order_id</code></td>
+</tr>
+<tr>
+<td><code>memberships.paid</code></td>
+<td>Becomes derived: paid ⇔ no open membership charge</td>
+</tr>
+<tr>
+<td><code>notification_prefs (user_id, channel, kind, enabled)</code>, <code>notifications (id, user_id, kind, channel, payload, status, sent_at)</code></td>
+<td class="nw">F40</td>
+</tr>
+</tbody></table></div>
+
+<h2 id="f36"><span class="secnum">24.3</span> F36 — Fees with MoMo / ZaloPay</h2>
+<section class="feature"><div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>Status</th>
+<th>Rules</th>
+<th>Repo refs</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>2</td>
+<td><span class="badge b-target">Target</span></td>
+<td>R-014 (paid member) · <a href="../11-security-and-roles.html">11 §7</a></td>
+<td>Phase 1: <code>memberships.paid</code> flag set by an admin</td>
+</tr>
+</tbody></table></div>
+<h3 id="f36-requirements"><span class="secnum">24.3.1</span> Requirements</h3>
+<p><em>As a player, I see what I owe and pay it from my phone with MoMo or ZaloPay. As an admin, I see who has paid without chasing cash.</em></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Requirement</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">FR-36.1</td>
+<td>Fee schedule per division: membership fee (per session) and weekly fee (per night played). Amounts in VND, integers</td>
+</tr>
+<tr>
+<td class="nw">FR-36.2</td>
+<td>Charges are created by events: membership on roster add (<code>RosterChanged</code>), weekly on <code>TeamMatchFinalized</code> for each player who played (forfeiting teams still owe, F39b)</td>
+</tr>
+<tr>
+<td class="nw">FR-36.3</td>
+<td>&quot;My fees&quot; lists open charges and history. <strong>Pay</strong> selects one or more charges, then the provider</td>
+</tr>
+<tr>
+<td class="nw">FR-36.4</td>
+<td>Create order server-side with the provider&#39;s signed API (HMAC-SHA256 with the partner secret from Secret Manager); <code>orderId = &lt;payment uuid&gt;</code>; redirect to the provider deep link or QR</td>
+</tr>
+<tr>
+<td class="nw">FR-36.5</td>
+<td><strong>Webhook (IPN/callback)</strong> is the only source of truth: verify the signature, check the amount and order ID, update in one transaction, respond in the provider&#39;s format. Idempotent by <code>provider_order_id</code></td>
+</tr>
+<tr>
+<td class="nw">FR-36.6</td>
+<td>The browser return page only shows &quot;Checking payment…&quot; and polls our API; it never marks anything paid</td>
+</tr>
+<tr>
+<td class="nw">FR-36.7</td>
+<td>A daily reconciliation job queries the provider for orders pending &gt; 15 min</td>
+</tr>
+<tr>
+<td class="nw">FR-36.8</td>
+<td>Admins can record a manual payment (cash or transfer) or waive a charge, with a reason (audited)</td>
+</tr>
+<tr>
+<td class="nw">FR-36.9</td>
+<td>A membership is paid ⇔ it has no open membership charge. The put-up and roster rules keep using that</td>
+</tr>
+<tr>
+<td class="nw">FR-36.10</td>
+<td>Refunds are manual in the provider portal and recorded by the admin in Phase 2</td>
+</tr>
+</tbody></table></div>
+<h3 id="f36-logic-webhook-handling"><span class="secnum">24.3.2</span> Logic: webhook handling</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E11-payments-notifications-f36-1.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E11-payments-notifications-f36-1.svg" alt="Diagram: 24 - Payments &amp; Notifications" loading="lazy" data-diagram-file="features_E11-payments-notifications-f36-1.svg" width="857" height="1259"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_E11-payments-notifications-f36-1.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="f36-flow"><span class="secnum">24.3.3</span> Flow</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E11-payments-notifications-f36-2.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E11-payments-notifications-f36-2.svg" alt="Diagram: 24 - Payments &amp; Notifications" loading="lazy" data-diagram-file="features_E11-payments-notifications-f36-2.svg" width="1191" height="729"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_E11-payments-notifications-f36-2.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="f36-edge-cases"><span class="secnum">24.3.4</span> Edge cases</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Situation</th>
+<th>Expected</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">EC-36.1</td>
+<td>Webhook arrives twice</td>
+<td>The second is a no-op</td>
+</tr>
+<tr>
+<td class="nw">EC-36.2</td>
+<td>Webhook arrives before the browser returns</td>
+<td>Normal; the return page sees <code>succeeded</code></td>
+</tr>
+<tr>
+<td class="nw">EC-36.3</td>
+<td>Charge waived while a payment is pending</td>
+<td>The payment still settles; the admin refunds manually; flagged</td>
+</tr>
+<tr>
+<td class="nw">EC-36.4</td>
+<td>User closes MoMo without paying</td>
+<td>Stays pending; reconciliation marks it failed or expired</td>
+</tr>
+</tbody></table></div>
+<h3 id="f36-acceptance-criteria"><span class="secnum">24.3.5</span> Acceptance criteria</h3>
+<ul>
+<li><strong>AC-36.1</strong> Given a forged webhook, then nothing changes and a security log line exists.</li>
+<li><strong>AC-36.2</strong> Given a successful MoMo sandbox payment, then the charges are paid and the player becomes put-up eligible.</li>
+</ul>
+<h3 id="f36-open-questions"><span class="secnum">24.3.6</span> Open questions</h3>
+<ul>
+<li>Which provider first, MoMo or ZaloPay? Are the fees per night or per session?</li>
+</ul>
+</section>
+
+<h2 id="f40"><span class="secnum">24.4</span> F40 — Notifications</h2>
+<section class="feature"><div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>Status</th>
+<th>Rules</th>
+<th>Repo refs</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>2</td>
+<td><span class="badge b-target">Target</span></td>
+<td><a href="../08-scorekeeping-engine.html">08 §7</a></td>
+<td>—</td>
+</tr>
+</tbody></table></div>
+<h3 id="f40-requirements"><span class="secnum">24.4.1</span> Requirements</h3>
+<p><em>As a player, I&#39;m told about my matches, results, fees and skill changes in Zalo, in Vietnamese, without spam. I can turn off what I don&#39;t want.</em></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Requirement</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">FR-40.1</td>
+<td>Channels: <strong>Zalo OA / ZNS</strong> (primary, needs the user&#39;s Zalo ID from F37 and OA follow, or a ZNS template with a phone number), <strong>email</strong> (fallback), <strong>in-app inbox</strong> (always)</td>
+</tr>
+<tr>
+<td class="nw">FR-40.2</td>
+<td>Kinds and triggers: below. Each kind has a template per locale (vi, en) and a channel default</td>
+</tr>
+<tr>
+<td class="nw">FR-40.3</td>
+<td>Preferences per user and kind; transactional kinds (payment receipt, dispute) can&#39;t be fully disabled; they fall back to in-app</td>
+</tr>
+<tr>
+<td class="nw">FR-40.4</td>
+<td>Sending only from the worker (F42), keyed by <code>(event_id, user_id, kind)</code> so retries never duplicate</td>
+</tr>
+<tr>
+<td class="nw">FR-40.5</td>
+<td>Quiet hours 23:00–08:00 ICT for non-urgent kinds; queued until the morning</td>
+</tr>
+<tr>
+<td class="nw">FR-40.6</td>
+<td>ZNS templates must be pre-approved by Zalo; template IDs live in config</td>
+</tr>
+<tr>
+<td class="nw">FR-40.7</td>
+<td>In-app inbox: bell icon with unread count, list, mark as read</td>
+</tr>
+</tbody></table></div>
+<h3 id="f40-kinds"><span class="secnum">24.4.2</span> Kinds</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Kind</th>
+<th>Trigger</th>
+<th>Who</th>
+<th>Urgent</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>match_reminder</code></td>
+<td>10:00 on match day (scheduler)</td>
+<td>Both rosters</td>
+<td>No</td>
+</tr>
+<tr>
+<td><code>verify_request</code></td>
+<td><code>TeamMatchSubmitted</code> (E08)</td>
+<td>Both captains</td>
+<td>Yes</td>
+</tr>
+<tr>
+<td><code>result_posted</code></td>
+<td><code>TeamMatchFinalized</code></td>
+<td>Both rosters</td>
+<td>No</td>
+</tr>
+<tr>
+<td><code>dispute_update</code></td>
+<td><code>DisputeOpened</code> / <code>Resolved</code></td>
+<td>Captains, admins</td>
+<td>Yes</td>
+</tr>
+<tr>
+<td><code>fee_due</code></td>
+<td>Charge created (F36)</td>
+<td>The player</td>
+<td>No</td>
+</tr>
+<tr>
+<td><code>payment_receipt</code></td>
+<td><code>PaymentSucceeded</code></td>
+<td>The payer</td>
+<td>Yes</td>
+</tr>
+<tr>
+<td><code>sl_changed</code></td>
+<td><code>SkillLevelChanged</code></td>
+<td>The player</td>
+<td>No</td>
+</tr>
+<tr>
+<td><code>roster_request</code></td>
+<td>Late add pending (F39c)</td>
+<td>Admins</td>
+<td>Yes</td>
+</tr>
+</tbody></table></div>
+<h3 id="f40-logic-dispatch"><span class="secnum">24.4.3</span> Logic: dispatch</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E11-payments-notifications-f40-1.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E11-payments-notifications-f40-1.svg" alt="Diagram: 24 - Payments &amp; Notifications" loading="lazy" data-diagram-file="features_E11-payments-notifications-f40-1.svg" width="560" height="1489"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_E11-payments-notifications-f40-1.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="f40-flow"><span class="secnum">24.4.4</span> Flow</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E11-payments-notifications-f40-2.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E11-payments-notifications-f40-2.svg" alt="Diagram: 24 - Payments &amp; Notifications" loading="lazy" data-diagram-file="features_E11-payments-notifications-f40-2.svg" width="1042" height="522"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_E11-payments-notifications-f40-2.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="f40-edge-cases"><span class="secnum">24.4.5</span> Edge cases</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Situation</th>
+<th>Expected</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">EC-40.1</td>
+<td>Zalo rejects (user unfollowed the OA)</td>
+<td>Mark the channel unreachable; fall back to email next time</td>
+</tr>
+<tr>
+<td class="nw">EC-40.2</td>
+<td>200 players in one finalize</td>
+<td>Batched with a rate limit per Zalo&#39;s quota</td>
+</tr>
+<tr>
+<td class="nw">EC-40.3</td>
+<td>Player has no Zalo and no email</td>
+<td>In-app only</td>
+</tr>
+</tbody></table></div>
+<h3 id="f40-acceptance-criteria"><span class="secnum">24.4.6</span> Acceptance criteria</h3>
+<ul>
+<li><strong>AC-40.1</strong> Given a worker retry after sending, then the player gets one message, not two.</li>
+<li><strong>AC-40.2</strong> Given <code>sl_changed</code> at 23:30, then it&#39;s delivered at 08:00; <code>dispute_update</code> at 23:30 is sent at once.</li>
+</ul>
+<h3 id="f40-open-questions"><span class="secnum">24.4.7</span> Open questions</h3>
+<ul>
+<li>Zalo OA account ownership, ZNS budget, and template approval timeline.</li>
+</ul>
+</section>
+
+</article>
+</main>
+<script src="../assets/site-data.js"></script>
+<script src="../assets/layout.js"></script>
+<script src="../assets/search-index.js"></script>
+<script src="../assets/site.js"></script>
+</body>
+</html>

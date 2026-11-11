@@ -1,0 +1,326 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>26 - Open Questions and Source-Document Defects · MViP Solution Design</title>
+<link rel="stylesheet" href="assets/site.css">
+<script src="assets/boot.js"></script>
+</head>
+<body data-root="" data-page="14-open-questions.html">
+<main id="main" class="content">
+<article class="doc">
+<h1>26 - Open Questions and Source-Document Defects</h1>
+
+<p>Owner: Product / League Operations. Each item has a <strong>default</strong> that engineering uses until it is answered, so no work is blocked.</p>
+<h2 id="a-defects-found-in-the-notion-sources"><span class="secnum">26.A</span> Defects found in the Notion sources</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>Source page</th>
+<th>Issue</th>
+<th>Default adopted</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Q1 <span class="badge b-confirmed">Confirmed</span></td>
+<td>Score keeper → 8-Ball race chart</td>
+<td>Cell <strong>SL6 vs SL4 = <code>5/6</code></strong> contradicts its mirror cell SL4 vs SL6 = <code>3/5</code></td>
+<td><strong>Resolved:</strong> <code>league-be</code> <code>race_chart</code> and FE <code>rules.ts</code> already use <strong>5/3</strong>. Fix the Notion page</td>
+</tr>
+<tr>
+<td class="nw">Q2</td>
+<td>ID Generation Rules → Member ID</td>
+<td>Format is 8 chars <code>xxYYaabb</code> (4-digit sequence), but the examples show 3 digits (<code>001</code>, <code>042</code>). Labels are inconsistent (<code>xx</code> = year, <code>YY</code> = month)</td>
+<td><code>YYMM</code> + 4-digit zero-padded sequence → <code>26110042</code>; capacity 9,999/month</td>
+</tr>
+<tr>
+<td class="nw">Q3</td>
+<td>ID Generation Rules → Team ID</td>
+<td>Region example &quot;for SaiGon, <strong>YY</strong> = {41/(50-59)}&quot; mislabels the field (<code>XX</code> is region) and conflicts with Vietnam&#39;s 2025 postal codes (HCMC = 70xxx). DEMO and scoresheet team numbers (<code>03209</code>, <code>04306</code>) follow the APA <em>division + team</em> pattern, not region + venue</td>
+<td><strong>Partly decided by the repo:</strong> <code>teams.team_number</code> is free TEXT and the seed uses APA-style <code>03209</code>. Keep that for the MVP. <strong>Decision needed</strong> before generators are built (Phase 2): APA-style or region + venue</td>
+</tr>
+<tr>
+<td class="nw">Q4</td>
+<td>DEMO → Rack End Rules</td>
+<td>Text says &quot;4 rack-completion buttons&quot; but the table lists <strong>6</strong>. <code>win_reason_code</code> lists only <code>MAKE_8, EARLY_8, SCRATCH_8, UNMARKED_POCKET_8</code> (no BR / 8OB; 8WP named differently)</td>
+<td>6 outcomes: <code>MAKE_8, BREAK_AND_RUN, EIGHT_ON_BREAK, EARLY_8, SCRATCH_8, WRONG_POCKET_8</code></td>
+</tr>
+<tr>
+<td class="nw">Q5</td>
+<td>Dictionary → Double-strike</td>
+<td>&quot;within a single league <strong>session</strong>&quot; vs &quot;BR and golden break on the <strong>same night</strong>&quot;</td>
+<td>Same night (team match). Confirm</td>
+</tr>
+<tr>
+<td class="nw">Q6</td>
+<td>Score keeper → 9-Ball matrix</td>
+<td>Loser SL3 at 12-8: Notion <code>22-24</code>, APA flyer <code>23&amp;24</code> (leaves 22 unmapped)</td>
+<td><code>22–24</code></td>
+</tr>
+<tr>
+<td class="nw">Q7</td>
+<td>Foundation DB → points rule</td>
+<td>Wording &quot;Winning the last match will get the winner another point&quot; is ambiguous (game vs match)</td>
+<td>Interpreted per the Score keeper 3-point table (3-0 / 2-0 / 2-1)</td>
+</tr>
+<tr>
+<td class="nw">Q8</td>
+<td>Player profile</td>
+<td>Mentions &quot;South Bay APA&quot; and APA trademarks (Equalizer®). Product brand is MViP</td>
+<td>Neutral naming in product: &quot;Handicap engine&quot;, league names configurable</td>
+</tr>
+<tr>
+<td class="nw">Q9</td>
+<td>DEMO → PLAYERS table</td>
+<td><code>team_id</code> on the player implies one team per player, which conflicts with multi-division play</td>
+<td>Many-to-many via <code>team_rosters</code></td>
+</tr>
+</tbody></table></div>
+<h2 id="b-rules-missing-from-the-sources-need-business-decisions"><span class="secnum">26.B</span> Rules missing from the sources (need business decisions)</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>Topic</th>
+<th>Question</th>
+<th>Default until decided</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">Q10</td>
+<td>Timeouts</td>
+<td>How many per rack, by SL?</td>
+<td>8B/9B: SL ≤ 3 → 2, SL ≥ 4 → 1 (APA)</td>
+</tr>
+<tr>
+<td class="nw">Q11</td>
+<td>Break after rack 1</td>
+<td>Winner breaks or alternate?</td>
+<td>Winner breaks</td>
+</tr>
+<tr>
+<td class="nw">Q12</td>
+<td>9-Ball starting SL / cap</td>
+<td>New player SL for 9B? Same 23 cap?</td>
+<td>SL 3; cap 23 (per Division Difference table)</td>
+</tr>
+<tr>
+<td class="nw">Q13</td>
+<td>8-Ball SL thresholds</td>
+<td>Mapping from avg effective innings (last 10 wins) → SL 2–7</td>
+<td>Manual SL only in Phase 1; show the metric to the LO</td>
+</tr>
+<tr>
+<td class="nw">Q14</td>
+<td>9-Ball PPI thresholds and window</td>
+<td>PPI → SL 1–9 mapping, number of matches considered</td>
+<td>Manual SL in Phase 1–2; window = last 10 matches</td>
+</tr>
+<tr>
+<td class="nw">Q15</td>
+<td>Forfeit points (9-Ball)</td>
+<td>Opponent gets 20? 15?</td>
+<td>20</td>
+</tr>
+<tr>
+<td class="nw">Q16</td>
+<td>Forfeit / no-show timing</td>
+<td>Grace period before a slot can be forfeited</td>
+<td>15 min after scheduled start, LO-configurable</td>
+</tr>
+<tr>
+<td class="nw">Q17</td>
+<td>Verification window</td>
+<td>How long captains have to verify</td>
+<td>24 h</td>
+</tr>
+<tr>
+<td class="nw">Q18</td>
+<td>One confirm, one silent</td>
+<td>Bonus for the confirming team only?</td>
+<td>No bonus for either team (FINALIZED_NO_BONUS)</td>
+</tr>
+<tr>
+<td class="nw">Q19</td>
+<td>Standings tie-breakers</td>
+<td>Order of tie-breakers</td>
+<td>Total points → team matches won → head-to-head → bonus points</td>
+</tr>
+<tr>
+<td class="nw">Q20</td>
+<td>Playoffs</td>
+<td>Format, qualification count</td>
+<td>Phase 2 design spike</td>
+</tr>
+<tr>
+<td class="nw">Q21</td>
+<td>Master division</td>
+<td>Scoring format, race length</td>
+<td>Phase 3 design spike</td>
+</tr>
+<tr>
+<td class="nw">Q22</td>
+<td>Shot clock</td>
+<td>Is the &quot;7 sec&quot; timer enforced?</td>
+<td>Informational only</td>
+</tr>
+<tr>
+<td class="nw">Q23</td>
+<td>Fees</td>
+<td>Who collects weekly fees (venue, captain, app)? Refund policy?</td>
+<td>Phase 1 manual flag; Phase 2 in-app e-wallet</td>
+</tr>
+<tr>
+<td class="nw">Q24</td>
+<td>Multi-division same night</td>
+<td>Allowed in MViP?</td>
+<td>Disallowed by default (bylaw flag)</td>
+</tr>
+<tr>
+<td class="nw">Q25</td>
+<td>Roster size</td>
+<td>Min/max players per team roster</td>
+<td>Min 5, max 8 (APA typical)</td>
+</tr>
+<tr>
+<td class="nw">Q26</td>
+<td>Championship lowest attainable</td>
+<td>Definition for the profile stat</td>
+<td>Phase 3 with tournaments</td>
+</tr>
+<tr>
+<td class="nw">Q27</td>
+<td>Hosting region / data residency</td>
+<td>Is Singapore (<code>asia-southeast1</code>) acceptable under PDPD for this business?</td>
+<td>Yes, with a cross-border transfer impact assessment</td>
+</tr>
+<tr>
+<td>Q28 <span class="badge b-confirmed">Confirmed</span></td>
+<td>Go framework</td>
+<td>Gin vs Echo vs Fiber vs chi</td>
+<td><strong>Resolved by the repo:</strong> <code>net/http</code> + gorilla/mux (ADR-001)</td>
+</tr>
+</tbody></table></div>
+<h2 id="c-questions-raised-by-the-repos-2026-11-10"><span class="secnum">26.C</span> Questions raised by the repos (2026-11-10)</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>Topic</th>
+<th>Question</th>
+<th>Default until decided</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">Q29</td>
+<td>Hill definition</td>
+<td>Is &quot;on the hill&quot; <code>race − 1</code>? (The kickoff prompt&#39;s example &quot;4–2 when loser race 5 = 2/1&quot; contradicts it.)</td>
+<td><code>race − 1</code>, so matches total 3, 3 or 2 points. Matches the business docs</td>
+</tr>
+<tr>
+<td class="nw">Q30</td>
+<td>Who may submit a night</td>
+<td>Home captain only, either captain, or both?</td>
+<td>Either captain of the night, or an admin</td>
+</tr>
+<tr>
+<td class="nw">Q31</td>
+<td>Member preview disclosure</td>
+<td>How much of a member&#39;s identity does <code>/members/preview</code> reveal before linking? IDs are guessable</td>
+<td>Display name only (e.g. &quot;Thomas D.&quot;), SL, team; rate-limited</td>
+</tr>
+<tr>
+<td class="nw">Q32</td>
+<td>Roster uniqueness</td>
+<td>The planned index allows <strong>one active roster per player overall</strong>; the business rule allows one per <strong>division</strong></td>
+<td>Keep the stricter index for the single-division MVP; change it in Phase 2</td>
+</tr>
+<tr>
+<td class="nw">Q33</td>
+<td><code>member_id</code> source</td>
+<td>League-assigned (<code>YYMMNNNN</code>) or APA-issued? Always 8 digits?</td>
+<td>Admin-entered TEXT, 8 digits validated in the FE</td>
+</tr>
+<tr>
+<td class="nw">Q34</td>
+<td>Default language</td>
+<td>The FE defaults to <code>en</code>; the market is Vietnam</td>
+<td>Switch the default to <code>vi</code> before the beta, and add a language switcher</td>
+</tr>
+</tbody></table></div>
+<h2 id="d-defects-found-in-the-repos"><span class="secnum">26.D</span> Defects found in the repos</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>Repo</th>
+<th>Issue</th>
+<th>Fix</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">Q35</td>
+<td>both</td>
+<td><strong>Docs drift:</strong> FE <code>CLAUDE.md</code>/README say <code>__Host-csrf</code>, but the code uses <code>__Secure-csrf</code>. The league-be auth README has stale paths (<code>/api/...</code>), JWT remnants, <code>logintx.go</code>, an <code>hd</code>/<code>ErrDomainNotAllowed</code> check that doesn&#39;t exist, and a missing test. <code>CLAUDE.md</code> points to <code>.claude/database.md</code> (the real path is <code>.claude/rules/database.md</code>). The FE router comment about the stored <code>next</code> path is stale (the feature was removed)</td>
+<td>Update the docs</td>
+</tr>
+<tr>
+<td class="nw">Q36</td>
+<td>league-be</td>
+<td><strong>League module and <code>00002</code> missing</strong> (see <a href="15-as-built-vs-target.html">27</a>). The seed inserts into the non-existent <code>team_rosters</code></td>
+<td>Restore or rebuild (P0)</td>
+</tr>
+<tr>
+<td class="nw">Q37</td>
+<td>league-be</td>
+<td><code>model/cursor.go</code> encodes an <strong>int64</strong> id, but every league PK is a UUID</td>
+<td>Encode <code>(created_at, id)</code> or the UUID string</td>
+</tr>
+<tr>
+<td class="nw">Q38</td>
+<td>league-be</td>
+<td>The Dockerfile exposes <strong>9200</strong>; <code>staging.yaml</code>/<code>production.yaml</code> listen on <strong>5001</strong></td>
+<td>Pick one port; set it in the k8s manifest</td>
+</tr>
+<tr>
+<td class="nw">Q39</td>
+<td>league-be</td>
+<td>Swagger shows <code>UserResponse.id</code> as an integer (it is a string)</td>
+<td>Fix the annotation, run <code>make swagger</code></td>
+</tr>
+<tr>
+<td class="nw">Q40</td>
+<td>league-be</td>
+<td>Unused config: YAML <code>server</code> timeouts, <code>logger</code> (mentions logrus, which isn&#39;t a dependency), <code>domains.allowed_origins</code>; env <code>BASE_URL</code>; stale <code>FRONTEND_URL</code> in <code>.env.example</code></td>
+<td>Remove, or wire them up</td>
+</tr>
+<tr>
+<td class="nw">Q41</td>
+<td>league-be</td>
+<td><code>staging.yaml</code> is identical to <code>production.yaml</code> (same hosts and OAuth redirect)</td>
+<td>Create real staging hosts</td>
+</tr>
+<tr>
+<td class="nw">Q42</td>
+<td>league-be</td>
+<td><code>make test</code> runs <code>go generate</code> for mocks, but there are no <code>//go:generate</code> directives or mock library</td>
+<td>Remove the step or add mocks</td>
+</tr>
+<tr>
+<td class="nw">Q43</td>
+<td>league-fe</td>
+<td>The FE MVP plan says the phases are &quot;done&quot;, but the FE and BE have never been run together in a browser</td>
+<td>Joint integration test before the beta</td>
+</tr>
+</tbody></table></div>
+
+</article>
+</main>
+<script src="assets/site-data.js"></script>
+<script src="assets/layout.js"></script>
+<script src="assets/search-index.js"></script>
+<script src="assets/site.js"></script>
+</body>
+</html>

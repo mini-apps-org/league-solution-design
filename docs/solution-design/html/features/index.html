@@ -1,0 +1,637 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>All Features · MViP Solution Design</title>
+<link rel="stylesheet" href="../assets/site.css">
+<script src="../assets/boot.js"></script>
+</head>
+<body data-root="../" data-page="features/index.html">
+<main id="main" class="content">
+<article class="doc">
+<h1>MViP Feature Specifications</h1>
+
+<p>Deep-dive specs for all <strong>54 features</strong>, grouped into <strong>12 epics</strong>.</p>
+<p>Layout: <strong>one folder per epic, one file per feature.</strong></p>
+<div class="code"><span class="code-lang">text</span><button class="copy" type="button">Copy</button><pre><code class="lang-text">features/
+  README.md                      ← you are here: full picture + index
+  E01-identity-access/
+    README.md                    ← epic: features by phase, Phase 1 and Phase 2 deep dives
+    F01-google-sign-in.md        ← feature: requirements · logic · flow · UI · API · edge cases · acceptance
+    …</code></pre></div>
+<p>Each epic README has a <strong>features-by-phase</strong> table and a <strong>deep dive per phase</strong>: component diagram, key sequence, data delta. Each feature file has its requirements, rules and logic, flow, UI, API and data, edge cases, acceptance criteria and, for Phase 1, the implementation gaps found in the repos. Phase 3 features (E12) are outlines.</p>
+<p>Snapshot: 2026-11-10, <code>league-be@444af15</code> · <code>league-fe@fc5bf84</code>. Parent design: <a href="../index.html">../README.md</a>.</p>
+<h2 id="1-epics">1. Epics</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Epic</th>
+<th>File</th>
+<th>Features</th>
+<th>Phase</th>
+<th>State</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">E01</td>
+<td><a href="E01-identity-access.html">Identity &amp; Access</a></td>
+<td>F1–F6, F37</td>
+<td>1, 2</td>
+<td><span class="badge b-built">Built</span> auth built · <span class="badge b-missing">Missing</span> role/link API missing</td>
+</tr>
+<tr>
+<td class="nw">E02</td>
+<td><a href="E02-league-foundation.html">League Data Foundation</a></td>
+<td>F7–F10, F38, F43</td>
+<td>1, 2</td>
+<td><span class="badge b-missing">Missing</span> P0 blocker</td>
+</tr>
+<tr>
+<td class="nw">E03</td>
+<td><a href="E03-schedule-night.html">Schedule &amp; Night View</a></td>
+<td>F11, F12, F39a</td>
+<td>1, 2</td>
+<td><span class="badge b-parked">Parked</span></td>
+</tr>
+<tr>
+<td class="nw">E04</td>
+<td><a href="E04-night-operations.html">Night Operations</a></td>
+<td>F13–F15, F39b</td>
+<td>1, 2</td>
+<td><span class="badge b-parked">Parked</span></td>
+</tr>
+<tr>
+<td class="nw">E05</td>
+<td><a href="E05-roster-admin.html">Roster &amp; Player Admin</a></td>
+<td>F16–F19, F39c, F41</td>
+<td>1, 2</td>
+<td><span class="badge b-parked">Parked</span></td>
+</tr>
+<tr>
+<td class="nw">E06</td>
+<td><a href="E06-platform-delivery.html">Platform &amp; Delivery</a></td>
+<td>F20–F25, F42, F44–F46</td>
+<td>1, 2</td>
+<td><span class="badge b-built">Built</span> partly</td>
+</tr>
+<tr>
+<td class="nw">E07</td>
+<td><a href="E07-live-scoring.html">Live Scoring</a></td>
+<td>F26–F30</td>
+<td>2</td>
+<td><span class="badge b-target">Target</span></td>
+</tr>
+<tr>
+<td class="nw">E08</td>
+<td><a href="E08-verification-disputes.html">Score Verification &amp; Disputes</a></td>
+<td class="nw">F31</td>
+<td>2</td>
+<td><span class="badge b-target">Target</span></td>
+</tr>
+<tr>
+<td class="nw">E09</td>
+<td><a href="E09-nine-ball-handicap.html">9-Ball &amp; Handicap</a></td>
+<td>F32, F33</td>
+<td>2</td>
+<td><span class="badge b-target">Target</span></td>
+</tr>
+<tr>
+<td class="nw">E10</td>
+<td><a href="E10-insights.html">Profile &amp; Standings</a></td>
+<td>F34, F35</td>
+<td>2</td>
+<td><span class="badge b-target">Target</span></td>
+</tr>
+<tr>
+<td class="nw">E11</td>
+<td><a href="E11-payments-notifications.html">Payments &amp; Notifications</a></td>
+<td>F36, F40</td>
+<td>2</td>
+<td><span class="badge b-target">Target</span></td>
+</tr>
+<tr>
+<td class="nw">E12</td>
+<td><a href="E12-growth.html">Growth</a></td>
+<td>F47–F54</td>
+<td>3</td>
+<td><span class="badge b-target">Target</span> outline</td>
+</tr>
+</tbody></table></div>
+<p>F39 (roster rules) is split across three epics: <strong>a</strong> Bye/No-Play weeks → E03, <strong>b</strong> forfeits → E04, <strong>c</strong> roster lock and one team per division → E05.</p>
+<h3 id="11-epic-dependency-map">1.1 Epic dependency map</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_index-1.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_index-1.svg" alt="Diagram: All Features" loading="lazy" data-diagram-file="features_index-1.svg" width="1412" height="393"></a><figcaption><span>Thick arrows are the Phase 1 critical path. E02 (red) is the P0 blocker, and dashed boxes are Phase 2–3.</span><a class="full" href="../assets/diagrams/features_index-1.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="12-roadmap">1.2 Roadmap</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_index-2.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_index-2.svg" alt="Diagram: All Features" loading="lazy" data-diagram-file="features_index-2.svg" width="1790" height="705"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_index-2.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h2 id="2-full-picture">2. Full picture</h2>
+<h3 id="21-system-components">2.1 System components</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_index-3.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_index-3.svg" alt="Diagram: All Features" loading="lazy" data-diagram-file="features_index-3.svg" width="2288" height="765"></a><figcaption><span>Solid boxes exist or are parked. Red = specified but missing from league-be (E02). Dashed = Phase 2.</span><a class="full" href="../assets/diagrams/features_index-3.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="22-a-league-night-end-to-end-phase-1">2.2 A league night, end to end (Phase 1)</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_index-4.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_index-4.svg" alt="Diagram: All Features" loading="lazy" data-diagram-file="features_index-4.svg" width="1361" height="1274"></a><figcaption><span>Every number (race, points, totals, stats) is computed in Postgres. The FE only previews.</span><a class="full" href="../assets/diagrams/features_index-4.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="23-season-and-team-match-lifecycle">2.3 Season and team-match lifecycle</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_index-5.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_index-5.svg" alt="Diagram: All Features" loading="lazy" data-diagram-file="features_index-5.svg" width="689" height="593"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_index-5.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="24-where-every-number-comes-from">2.4 Where every number comes from</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_index-6.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_index-6.svg" alt="Diagram: All Features" loading="lazy" data-diagram-file="features_index-6.svg" width="1558" height="406"></a><figcaption><span>Red nodes belong to the missing <code>00002_business_rules.sql</code>. Restoring it is E02-F8.</span><a class="full" href="../assets/diagrams/features_index-6.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h2 id="3-feature-index">3. Feature index</h2>
+<p>Status: <span class="badge b-built">Built</span> · <span class="badge b-parked">Parked</span> FE · <span class="badge b-missing">Missing</span> specified but missing · <span class="badge b-notstarted">Not started</span> not started · <span class="badge b-target">Target</span> later phase.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>Feature</th>
+<th>Epic</th>
+<th>Phase</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">F1</td>
+<td><a href="E01-identity-access.html#f01">Google sign-in</a></td>
+<td class="nw">E01</td>
+<td>1</td>
+<td><span class="badge b-built">Built</span></td>
+</tr>
+<tr>
+<td class="nw">F2</td>
+<td><a href="E01-identity-access.html#f02">Sessions &amp; logout</a></td>
+<td class="nw">E01</td>
+<td>1</td>
+<td><span class="badge b-built">Built</span></td>
+</tr>
+<tr>
+<td class="nw">F3</td>
+<td><a href="E01-identity-access.html#f03">CSRF protection</a></td>
+<td class="nw">E01</td>
+<td>1</td>
+<td><span class="badge b-built">Built</span></td>
+</tr>
+<tr>
+<td class="nw">F4</td>
+<td><a href="E01-identity-access.html#f04"><code>/me</code> with role + playerId</a></td>
+<td class="nw">E01</td>
+<td>1</td>
+<td><span class="badge b-built">Built</span>/ <span class="badge b-missing">Missing</span></td>
+</tr>
+<tr>
+<td class="nw">F5</td>
+<td><a href="E01-identity-access.html#f05">Onboarding: link member ID</a></td>
+<td class="nw">E01</td>
+<td>1</td>
+<td><span class="badge b-built">Built</span> UI / <span class="badge b-missing">Missing</span> API</td>
+</tr>
+<tr>
+<td class="nw">F6</td>
+<td><a href="E01-identity-access.html#f06">Role checks + captain-owns-night</a></td>
+<td class="nw">E01</td>
+<td>1</td>
+<td><span class="badge b-missing">Missing</span></td>
+</tr>
+<tr>
+<td class="nw">F7</td>
+<td><a href="E02-league-foundation.html#f07">Schema restore (<code>team_rosters</code>, CHECKs)</a></td>
+<td class="nw">E02</td>
+<td>1</td>
+<td><span class="badge b-missing">Missing</span></td>
+</tr>
+<tr>
+<td class="nw">F8</td>
+<td><a href="E02-league-foundation.html#f08">Postgres business rules</a></td>
+<td class="nw">E02</td>
+<td>1</td>
+<td><span class="badge b-missing">Missing</span></td>
+</tr>
+<tr>
+<td class="nw">F9</td>
+<td><a href="E02-league-foundation.html#f09">Seed + migrate/seed targets</a></td>
+<td class="nw">E02</td>
+<td>1</td>
+<td><span class="badge b-missing">Missing</span></td>
+</tr>
+<tr>
+<td class="nw">F10</td>
+<td><a href="E02-league-foundation.html#f10">League API</a></td>
+<td class="nw">E02</td>
+<td>1</td>
+<td><span class="badge b-missing">Missing</span></td>
+</tr>
+<tr>
+<td class="nw">F11</td>
+<td><a href="E03-schedule-night.html#f11">Schedule</a></td>
+<td class="nw">E03</td>
+<td>1</td>
+<td><span class="badge b-parked">Parked</span></td>
+</tr>
+<tr>
+<td class="nw">F12</td>
+<td><a href="E03-schedule-night.html#f12">Night view &amp; scoresheet</a></td>
+<td class="nw">E03</td>
+<td>1</td>
+<td><span class="badge b-parked">Parked</span></td>
+</tr>
+<tr>
+<td class="nw">F13</td>
+<td><a href="E04-night-operations.html#f13">Put-up with 23-SL cap</a></td>
+<td class="nw">E04</td>
+<td>1</td>
+<td><span class="badge b-parked">Parked</span></td>
+</tr>
+<tr>
+<td class="nw">F14</td>
+<td><a href="E04-night-operations.html#f14">Result entry</a></td>
+<td class="nw">E04</td>
+<td>1</td>
+<td><span class="badge b-parked">Parked</span></td>
+</tr>
+<tr>
+<td class="nw">F15</td>
+<td><a href="E04-night-operations.html#f15">Submit night</a></td>
+<td class="nw">E04</td>
+<td>1</td>
+<td><span class="badge b-parked">Parked</span></td>
+</tr>
+<tr>
+<td class="nw">F16</td>
+<td><a href="E05-roster-admin.html#f16">Add paid member</a></td>
+<td class="nw">E05</td>
+<td>1</td>
+<td><span class="badge b-parked">Parked</span></td>
+</tr>
+<tr>
+<td class="nw">F17</td>
+<td><a href="E05-roster-admin.html#f17">Player search</a></td>
+<td class="nw">E05</td>
+<td>1</td>
+<td><span class="badge b-parked">Parked</span></td>
+</tr>
+<tr>
+<td class="nw">F18</td>
+<td><a href="E05-roster-admin.html#f18">Skill-level change &amp; history</a></td>
+<td class="nw">E05</td>
+<td>1</td>
+<td><span class="badge b-parked">Parked</span></td>
+</tr>
+<tr>
+<td class="nw">F19</td>
+<td><a href="E05-roster-admin.html#f19">Player transfer</a></td>
+<td class="nw">E05</td>
+<td>1</td>
+<td><span class="badge b-parked">Parked</span></td>
+</tr>
+<tr>
+<td class="nw">F20</td>
+<td><a href="E06-platform-delivery.html#f20">PWA, theme, i18n, error copy</a></td>
+<td class="nw">E06</td>
+<td>1</td>
+<td><span class="badge b-built">Built</span></td>
+</tr>
+<tr>
+<td class="nw">F21</td>
+<td><a href="E06-platform-delivery.html#f21">CI/CD</a></td>
+<td class="nw">E06</td>
+<td>1</td>
+<td><span class="badge b-built">Built</span></td>
+</tr>
+<tr>
+<td class="nw">F22</td>
+<td><a href="E06-platform-delivery.html#f22">GKE deployment</a></td>
+<td class="nw">E06</td>
+<td>1</td>
+<td><span class="badge b-notstarted">Not started</span></td>
+</tr>
+<tr>
+<td class="nw">F23</td>
+<td><a href="E06-platform-delivery.html#f23">Staging + Google consent screen</a></td>
+<td class="nw">E06</td>
+<td>1</td>
+<td><span class="badge b-notstarted">Not started</span></td>
+</tr>
+<tr>
+<td class="nw">F24</td>
+<td><a href="E06-platform-delivery.html#f24">Generated API types + FE/BE integration test</a></td>
+<td class="nw">E06</td>
+<td>1</td>
+<td><span class="badge b-notstarted">Not started</span></td>
+</tr>
+<tr>
+<td class="nw">F25</td>
+<td><a href="E06-platform-delivery.html#f25">Rate limiting, structured logs, vi default</a></td>
+<td class="nw">E06</td>
+<td>1</td>
+<td><span class="badge b-notstarted">Not started</span></td>
+</tr>
+<tr>
+<td class="nw">F26</td>
+<td><a href="E07-live-scoring.html#f26">Coin flip &amp; lag</a></td>
+<td class="nw">E07</td>
+<td>2</td>
+<td><span class="badge b-target">Target</span></td>
+</tr>
+<tr>
+<td class="nw">F27</td>
+<td><a href="E07-live-scoring.html#f27">Live 8-Ball scoring</a></td>
+<td class="nw">E07</td>
+<td>2</td>
+<td><span class="badge b-target">Target</span></td>
+</tr>
+<tr>
+<td class="nw">F28</td>
+<td><a href="E07-live-scoring.html#f28">Racks &amp; accolades</a></td>
+<td class="nw">E07</td>
+<td>2</td>
+<td><span class="badge b-target">Target</span></td>
+</tr>
+<tr>
+<td class="nw">F29</td>
+<td><a href="E07-live-scoring.html#f29">Offline scoring sync</a></td>
+<td class="nw">E07</td>
+<td>2</td>
+<td><span class="badge b-target">Target</span></td>
+</tr>
+<tr>
+<td class="nw">F30</td>
+<td><a href="E07-live-scoring.html#f30">Scoring lease &amp; live viewers</a></td>
+<td class="nw">E07</td>
+<td>2</td>
+<td><span class="badge b-target">Target</span></td>
+</tr>
+<tr>
+<td class="nw">F31</td>
+<td><a href="E08-verification-disputes.html#f31">Dual-captain verification &amp; disputes</a></td>
+<td class="nw">E08</td>
+<td>2</td>
+<td><span class="badge b-target">Target</span></td>
+</tr>
+<tr>
+<td class="nw">F32</td>
+<td><a href="E09-nine-ball-handicap.html#f32">9-Ball scoring + per-format SL</a></td>
+<td class="nw">E09</td>
+<td>2</td>
+<td><span class="badge b-target">Target</span></td>
+</tr>
+<tr>
+<td class="nw">F33</td>
+<td><a href="E09-nine-ball-handicap.html#f33">Skill-level suggestions</a></td>
+<td class="nw">E09</td>
+<td>2</td>
+<td><span class="badge b-target">Target</span></td>
+</tr>
+<tr>
+<td class="nw">F34</td>
+<td><a href="E10-insights.html#f34">Player profile</a></td>
+<td class="nw">E10</td>
+<td>2</td>
+<td><span class="badge b-target">Target</span></td>
+</tr>
+<tr>
+<td class="nw">F35</td>
+<td><a href="E10-insights.html#f35">Public standings</a></td>
+<td class="nw">E10</td>
+<td>2</td>
+<td><span class="badge b-target">Target</span></td>
+</tr>
+<tr>
+<td class="nw">F36</td>
+<td><a href="E11-payments-notifications.html#f36">Fees with MoMo / ZaloPay</a></td>
+<td class="nw">E11</td>
+<td>2</td>
+<td><span class="badge b-target">Target</span></td>
+</tr>
+<tr>
+<td class="nw">F37</td>
+<td><a href="E01-identity-access.html#f37">Zalo login &amp; Mini App</a></td>
+<td class="nw">E01</td>
+<td>2</td>
+<td><span class="badge b-target">Target</span></td>
+</tr>
+<tr>
+<td class="nw">F38</td>
+<td><a href="E02-league-foundation.html#f38">Generated Member ID &amp; Team ID</a></td>
+<td class="nw">E02</td>
+<td>2</td>
+<td><span class="badge b-target">Target</span></td>
+</tr>
+<tr>
+<td class="nw">F39</td>
+<td>Roster rules (a: bye/no-play, b: forfeit, c: lock + per-division) <a href="E03-schedule-night.html#f39a">a</a> · <a href="E04-night-operations.html#f39b">b</a> · <a href="E05-roster-admin.html#f39c">c</a></td>
+<td>E03/E04/E05</td>
+<td>2</td>
+<td><span class="badge b-target">Target</span></td>
+</tr>
+<tr>
+<td class="nw">F40</td>
+<td><a href="E11-payments-notifications.html#f40">Notifications</a></td>
+<td class="nw">E11</td>
+<td>2</td>
+<td><span class="badge b-target">Target</span></td>
+</tr>
+<tr>
+<td class="nw">F41</td>
+<td><a href="E05-roster-admin.html#f41">Audit log</a></td>
+<td class="nw">E05</td>
+<td>2</td>
+<td><span class="badge b-target">Target</span></td>
+</tr>
+<tr>
+<td class="nw">F42</td>
+<td><a href="E06-platform-delivery.html#f42">Worker, outbox, Redis</a></td>
+<td class="nw">E06</td>
+<td>2</td>
+<td><span class="badge b-target">Target</span></td>
+</tr>
+<tr>
+<td class="nw">F43</td>
+<td><a href="E02-league-foundation.html#f43">Migration tool</a></td>
+<td class="nw">E02</td>
+<td>2</td>
+<td><span class="badge b-target">Target</span></td>
+</tr>
+<tr>
+<td class="nw">F44</td>
+<td><a href="E06-platform-delivery.html#f44">Monitoring &amp; error tracking</a></td>
+<td class="nw">E06</td>
+<td>2</td>
+<td><span class="badge b-target">Target</span></td>
+</tr>
+<tr>
+<td class="nw">F45</td>
+<td><a href="E06-platform-delivery.html#f45">Playwright E2E</a></td>
+<td class="nw">E06</td>
+<td>2</td>
+<td><span class="badge b-target">Target</span></td>
+</tr>
+<tr>
+<td class="nw">F46</td>
+<td><a href="E06-platform-delivery.html#f46">Load testing</a></td>
+<td class="nw">E06</td>
+<td>2</td>
+<td><span class="badge b-target">Target</span></td>
+</tr>
+<tr>
+<td class="nw">F47</td>
+<td><a href="E12-growth.html#f47">Master division</a></td>
+<td class="nw">E12</td>
+<td>3</td>
+<td><span class="badge b-target">Target</span></td>
+</tr>
+<tr>
+<td class="nw">F48</td>
+<td><a href="E12-growth.html#f48">Tournaments &amp; brackets</a></td>
+<td class="nw">E12</td>
+<td>3</td>
+<td><span class="badge b-target">Target</span></td>
+</tr>
+<tr>
+<td class="nw">F49</td>
+<td><a href="E12-growth.html#f49">Sandbagging detection</a></td>
+<td class="nw">E12</td>
+<td>3</td>
+<td><span class="badge b-target">Target</span></td>
+</tr>
+<tr>
+<td class="nw">F50</td>
+<td><a href="E12-growth.html#f50">Multi-league &amp; LO roles</a></td>
+<td class="nw">E12</td>
+<td>3</td>
+<td><span class="badge b-target">Target</span></td>
+</tr>
+<tr>
+<td class="nw">F51</td>
+<td><a href="E12-growth.html#f51">Sponsor placements</a></td>
+<td class="nw">E12</td>
+<td>3</td>
+<td><span class="badge b-target">Target</span></td>
+</tr>
+<tr>
+<td class="nw">F52</td>
+<td><a href="E12-growth.html#f52">10-Ball &amp; 3-Cushion Carom</a></td>
+<td class="nw">E12</td>
+<td>3</td>
+<td><span class="badge b-target">Target</span></td>
+</tr>
+<tr>
+<td class="nw">F53</td>
+<td><a href="E12-growth.html#f53">Venue dashboard</a></td>
+<td class="nw">E12</td>
+<td>3</td>
+<td><span class="badge b-target">Target</span></td>
+</tr>
+<tr>
+<td class="nw">F54</td>
+<td><a href="E12-growth.html#f54">Championship qualification tracking</a></td>
+<td class="nw">E12</td>
+<td>3</td>
+<td><span class="badge b-target">Target</span></td>
+</tr>
+</tbody></table></div>
+<h2 id="4-how-to-read-a-feature-spec">4. How to read a feature spec</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Section</th>
+<th>Contents</th>
+<th>IDs</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Requirements</td>
+<td>User story + numbered functional requirements</td>
+<td><code>FR-&lt;n&gt;.&lt;m&gt;</code></td>
+</tr>
+<tr>
+<td>Rules &amp; logic</td>
+<td>Pseudo-code, decision tables, state diagrams; rule IDs from <a href="../04-domain-rules.html">04</a></td>
+<td><code>R-xxx</code></td>
+</tr>
+<tr>
+<td>Flow</td>
+<td>Sequence or activity diagram</td>
+<td>—</td>
+</tr>
+<tr>
+<td>UI</td>
+<td>Screens, states, copy keys (<code>en.json</code>)</td>
+<td>—</td>
+</tr>
+<tr>
+<td>API &amp; data</td>
+<td>Endpoints, fields, tables, functions, error codes</td>
+<td>—</td>
+</tr>
+<tr>
+<td>Edge cases</td>
+<td>Situation → expected behavior</td>
+<td><code>EC-&lt;n&gt;.&lt;m&gt;</code></td>
+</tr>
+<tr>
+<td>Acceptance criteria</td>
+<td>Given / When / Then</td>
+<td><code>AC-&lt;n&gt;.&lt;m&gt;</code></td>
+</tr>
+<tr>
+<td>Implementation gaps</td>
+<td>Phase 1: where the parked or live code differs from this spec</td>
+<td>—</td>
+</tr>
+</tbody></table></div>
+<h2 id="5-diagram-legend">5. Diagram legend</h2>
+<p>All diagrams share one theme (<code>base</code>, app blue <code>#1F6FEB</code>, Arial) and one colour key:</p>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_index-7.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_index-7.svg" alt="Diagram: All Features" loading="lazy" data-diagram-file="features_index-7.svg" width="790" height="369"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_index-7.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Mark</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Thick arrow <code>==&gt;</code></td>
+<td>Primary path</td>
+</tr>
+<tr>
+<td>Solid arrow</td>
+<td>Runtime call</td>
+</tr>
+<tr>
+<td>Dotted arrow</td>
+<td>Async, optional or planned</td>
+</tr>
+<tr>
+<td>Dashed border</td>
+<td>Planned (Phase 2–3)</td>
+</tr>
+<tr>
+<td>Red fill</td>
+<td>Specified but missing from the repo, or broken</td>
+</tr>
+<tr>
+<td>Sequence green / red bands</td>
+<td>Success / failure branch</td>
+</tr>
+<tr>
+<td>Sequence amber notes</td>
+<td>Business rules (<code>R-xxx</code>)</td>
+</tr>
+</tbody></table></div>
+
+</article>
+</main>
+<script src="../assets/site-data.js"></script>
+<script src="../assets/layout.js"></script>
+<script src="../assets/search-index.js"></script>
+<script src="../assets/site.js"></script>
+</body>
+</html>

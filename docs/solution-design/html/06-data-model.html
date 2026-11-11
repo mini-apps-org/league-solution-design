@@ -1,0 +1,711 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>06 - Data Model (PostgreSQL) · MViP Solution Design</title>
+<link rel="stylesheet" href="assets/site.css">
+<script src="assets/boot.js"></script>
+</head>
+<body data-root="" data-page="06-data-model.html">
+<main id="main" class="content">
+<article class="doc">
+<h1>06 - Data Model (PostgreSQL)</h1>
+
+<blockquote>
+<p><span class="badge b-built">Built</span><strong>As-built</strong> = in <code>league-be/db/migrations/00001_init.sql</code> on <code>master</code> today.
+<span class="badge b-planned">Planned</span><strong>Planned</strong> = specified in <code>league-fe/plans/20261104-2126-bida-league-mvp/plan-2-database-rules-and-seed.md</code> (<code>00002_business_rules.sql</code>). <strong>Not in the repo</strong> (see <a href="15-as-built-vs-target.html">27</a>).
+<span class="badge b-target">Target</span><strong>Target</strong> = later phases of this design.</p>
+<p>Conventions that come from the repo:</p>
+<ul>
+<li>PKs are <code>UUID DEFAULT uuid_generate_v4()</code> (extension <code>uuid-ossp</code>). The exceptions are <code>users.id</code> and <code>sessions.id</code>, which are <code>TEXT</code> because the Go auth code types them as <code>string</code>. Every FK to <code>users</code> is therefore <code>TEXT</code>.</li>
+<li><code>skill_level_history</code> uses <code>BIGINT GENERATED ALWAYS AS IDENTITY</code>.</li>
+<li>No Postgres <code>ENUM</code> types. Statuses are <code>TEXT</code>/<code>VARCHAR</code> with <code>CHECK</code> constraints.</li>
+<li>Business rules are <strong>Postgres triggers and functions</strong> (decision: <a href="05-architecture.html#7-architecture-decisions">05 ADR-004</a>). Go and TypeScript never compute points.</li>
+<li>There is no migration tool yet: files are numbered <code>0000N_*.sql</code> and applied by hand. A <code>make migrate</code> runner is planned.</li>
+</ul>
+</blockquote>
+<h2 id="1-erd-as-built--planned"><span class="secnum">6.1</span> ERD (as-built + planned)</h2>
+<figure class="diagram"><a class="diagram-img" href="assets/diagrams/06-data-model-1.svg" target="_blank" aria-label="Open diagram full screen"><img src="assets/diagrams/06-data-model-1.svg" alt="Diagram: 06 - Data Model (PostgreSQL)" loading="lazy" data-diagram-file="06-data-model-1.svg" width="1625" height="840"></a><figcaption><span></span><a class="full" href="assets/diagrams/06-data-model-1.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<hr>
+<h2 id="a--as-built-00001_initsql"><span class="secnum">6.A</span> <span class="badge b-built">Built</span> As-built: <code>00001_init.sql</code></h2>
+<h3 id="a1-identity"><span class="secnum">6.A.1</span> Identity</h3>
+<h4 id="users"><code>users</code></h4>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>id</td>
+<td>TEXT PK, default <code>uuid_generate_v4()</code></td>
+<td>TEXT to match <code>auth.User.ID string</code></td>
+</tr>
+<tr>
+<td>google_sub</td>
+<td>TEXT NOT NULL UNIQUE</td>
+<td>Target of the login upsert (<code>ON CONFLICT (google_sub)</code>). Users are never matched by email</td>
+</tr>
+<tr>
+<td>email</td>
+<td>TEXT NOT NULL</td>
+<td></td>
+</tr>
+<tr>
+<td>email_verified</td>
+<td>BOOLEAN NOT NULL default false</td>
+<td>Login requires <code>true</code></td>
+</tr>
+<tr>
+<td>name</td>
+<td>TEXT NOT NULL</td>
+<td></td>
+</tr>
+<tr>
+<td>avatar_url</td>
+<td>TEXT NOT NULL default <code>&#39;&#39;</code></td>
+<td></td>
+</tr>
+<tr>
+<td>hd</td>
+<td>TEXT NULL</td>
+<td>Google Workspace domain (stored, not enforced)</td>
+</tr>
+<tr>
+<td>created_at, last_login_at</td>
+<td>TIMESTAMPTZ</td>
+<td></td>
+</tr>
+</tbody></table></div>
+<h4 id="sessions"><code>sessions</code></h4>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>id</td>
+<td>TEXT PK</td>
+<td>32 random bytes, base64url (generated in Go)</td>
+</tr>
+<tr>
+<td>user_id</td>
+<td>TEXT FK → users ON DELETE CASCADE</td>
+<td>Index <code>sessions_user_id_idx</code></td>
+</tr>
+<tr>
+<td>created_at</td>
+<td>TIMESTAMPTZ</td>
+<td>Absolute TTL check (<code>SESSION_TTL</code>, 12 h)</td>
+</tr>
+<tr>
+<td>last_seen_at</td>
+<td>TIMESTAMPTZ</td>
+<td>Idle TTL check (<code>SESSION_IDLE_TTL</code>, 30 min). Updated on every authenticated request</td>
+</tr>
+</tbody></table></div>
+<h4 id="rbac-roles-permissions-roles_permissions-users_roles">RBAC: <code>roles</code>, <code>permissions</code>, <code>roles_permissions</code>, <code>users_roles</code></h4>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Table</th>
+<th>Key columns</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>roles</td>
+<td><code>id UUID</code>, <code>code VARCHAR(50) UNIQUE</code>, <code>name</code>, <code>description</code></td>
+</tr>
+<tr>
+<td>permissions</td>
+<td><code>id UUID</code>, <code>code VARCHAR(100) UNIQUE</code>, <code>name</code>, <code>description</code></td>
+</tr>
+<tr>
+<td>roles_permissions</td>
+<td>PK (<code>role_id</code>, <code>permission_id</code>), index on <code>permission_id</code></td>
+</tr>
+<tr>
+<td>users_roles</td>
+<td>PK (<code>user_id TEXT</code>, <code>role_id</code>), <code>granted_by TEXT</code> (for audits), index on <code>role_id</code></td>
+</tr>
+</tbody></table></div>
+<p>Seeded in the migration:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Role</th>
+<th>Permissions</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>PLAYER</code></td>
+<td><code>player.read</code></td>
+</tr>
+<tr>
+<td><code>CAPTAIN</code></td>
+<td><code>player.read</code>, <code>match.put_up</code>, <code>match.enter_score</code>, <code>match.submit</code>, <code>roster.manage</code></td>
+</tr>
+<tr>
+<td><code>ADMIN</code></td>
+<td>All 7: the above + <code>player.change_skill_level</code>, <code>season.manage</code></td>
+</tr>
+</tbody></table></div>
+<h3 id="a2-league-structure"><span class="secnum">6.A.2</span> League structure</h3>
+<h4 id="seasons--session-in-the-business-docs"><code>seasons</code> (= &quot;Session&quot; in the business docs)</h4>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>id</td>
+<td>UUID PK</td>
+</tr>
+<tr>
+<td>name</td>
+<td>TEXT (&quot;Fall 2026&quot;)</td>
+</tr>
+<tr>
+<td>starts_on, ends_on</td>
+<td>DATE</td>
+</tr>
+<tr>
+<td>is_active</td>
+<td>BOOLEAN default false</td>
+</tr>
+</tbody></table></div>
+<h4 id="divisions"><code>divisions</code></h4>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>id</td>
+<td>UUID PK</td>
+<td></td>
+</tr>
+<tr>
+<td>season_id</td>
+<td>UUID FK → seasons ON DELETE CASCADE</td>
+<td>A division belongs to one season</td>
+</tr>
+<tr>
+<td>name</td>
+<td>TEXT</td>
+<td>&quot;8-Ball Open&quot;. UNIQUE (<code>season_id</code>, <code>name</code>)</td>
+</tr>
+<tr>
+<td>format</td>
+<td>TEXT default <code>&#39;8-ball&#39;</code></td>
+<td></td>
+</tr>
+<tr>
+<td>skill_level_cap</td>
+<td>SMALLINT default 23</td>
+<td>The 23-Rule. Functions read this column, never a literal 23</td>
+</tr>
+</tbody></table></div>
+<h4 id="venues"><code>venues</code></h4>
+<p><code>id UUID</code>, <code>name TEXT NOT NULL</code>, <code>address TEXT NULL</code>.</p>
+<h4 id="players"><code>players</code></h4>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>id</td>
+<td>UUID PK</td>
+<td></td>
+</tr>
+<tr>
+<td>user_id</td>
+<td>TEXT UNIQUE FK → users ON DELETE SET NULL</td>
+<td>Set by onboarding (&quot;link my member ID&quot;)</td>
+</tr>
+<tr>
+<td>member_id</td>
+<td>TEXT NOT NULL UNIQUE</td>
+<td>e.g. <code>&#39;95007620&#39;</code>. 8 digits is assumed by the FE (<code>MEMBER_ID_LENGTH = 8</code>)</td>
+</tr>
+<tr>
+<td>full_name</td>
+<td>TEXT</td>
+<td></td>
+</tr>
+<tr>
+<td>skill_level</td>
+<td>SMALLINT default 3, CHECK 2..7</td>
+<td><strong>One SL per player</strong> (8-Ball). Per-format SL is <span class="badge b-target">Target</span> Phase 2</td>
+</tr>
+<tr>
+<td>is_paid</td>
+<td>BOOLEAN default false</td>
+<td>Captains may add only paid members</td>
+</tr>
+</tbody></table></div>
+<h4 id="teams"><code>teams</code></h4>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>id</td>
+<td>UUID PK</td>
+<td></td>
+</tr>
+<tr>
+<td>division_id</td>
+<td>UUID FK → divisions ON DELETE CASCADE</td>
+<td></td>
+</tr>
+<tr>
+<td>team_number</td>
+<td>TEXT</td>
+<td>APA-style, e.g. <code>&#39;03209&#39;</code>. UNIQUE (<code>division_id</code>, <code>team_number</code>)</td>
+</tr>
+<tr>
+<td>name</td>
+<td>TEXT</td>
+<td></td>
+</tr>
+<tr>
+<td>captain_player_id</td>
+<td>UUID FK → players NULL</td>
+<td>Drives the &quot;captain owns this night&quot; check</td>
+</tr>
+</tbody></table></div>
+<h4 id="skill_level_history"><code>skill_level_history</code></h4>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>id</td>
+<td>BIGINT identity PK</td>
+</tr>
+<tr>
+<td>player_id</td>
+<td>UUID FK → players ON DELETE CASCADE</td>
+</tr>
+<tr>
+<td>old_skill_level</td>
+<td>SMALLINT</td>
+</tr>
+<tr>
+<td>new_skill_level</td>
+<td>SMALLINT CHECK 2..7</td>
+</tr>
+<tr>
+<td>reason</td>
+<td>TEXT</td>
+</tr>
+<tr>
+<td>changed_by</td>
+<td>TEXT FK → users</td>
+</tr>
+<tr>
+<td>changed_at</td>
+<td>TIMESTAMPTZ</td>
+</tr>
+</tbody></table></div>
+<h4 id="race_chart"><code>race_chart</code></h4>
+<p><code>skill_level_a</code>, <code>skill_level_b</code> (CHECK 2..7), <code>race_a</code>, <code>race_b</code>. PK (<code>a</code>, <code>b</code>). <strong>36 rows are seeded in the migration</strong>, and they match the corrected chart in <a href="04-domain-rules.html#51-race-chart-games-needed">04 §5.1</a> (SL6 v SL4 = 5/3).</p>
+<h3 id="a3-matches"><span class="secnum">6.A.3</span> Matches</h3>
+<h4 id="team_matches"><code>team_matches</code></h4>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>id</td>
+<td>UUID PK</td>
+<td></td>
+</tr>
+<tr>
+<td>division_id</td>
+<td>UUID FK → divisions</td>
+<td>Index (<code>division_id</code>, <code>week_no</code>)</td>
+</tr>
+<tr>
+<td>week_no</td>
+<td>SMALLINT</td>
+<td></td>
+</tr>
+<tr>
+<td>home_team_id, away_team_id</td>
+<td>UUID FK → teams</td>
+<td>CHECK <code>home &lt;&gt; away</code></td>
+</tr>
+<tr>
+<td>venue_id</td>
+<td>UUID FK → venues NULL</td>
+<td></td>
+</tr>
+<tr>
+<td>scheduled_at</td>
+<td>TIMESTAMPTZ</td>
+<td></td>
+</tr>
+<tr>
+<td>status</td>
+<td>VARCHAR(20) default <code>&#39;scheduled&#39;</code></td>
+<td><code>scheduled</code> → <code>in_progress</code> → <code>submitted</code>. No CHECK in 00001; 00002 adds it</td>
+</tr>
+<tr>
+<td>home_points, away_points</td>
+<td>SMALLINT default 0</td>
+<td>Rolled up by a trigger (<span class="badge b-planned">Planned</span>)</td>
+</tr>
+<tr>
+<td>submitted_by</td>
+<td>TEXT FK → users</td>
+<td></td>
+</tr>
+<tr>
+<td>submitted_at</td>
+<td>TIMESTAMPTZ</td>
+<td></td>
+</tr>
+</tbody></table></div>
+<h4 id="individual_matches"><code>individual_matches</code></h4>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>id</td>
+<td>UUID PK</td>
+<td></td>
+</tr>
+<tr>
+<td>team_match_id</td>
+<td>UUID FK ON DELETE CASCADE</td>
+<td>UNIQUE (<code>team_match_id</code>, <code>match_order</code>)</td>
+</tr>
+<tr>
+<td>match_order</td>
+<td>SMALLINT CHECK 1..5</td>
+<td></td>
+</tr>
+<tr>
+<td>first_put_up</td>
+<td>TEXT NOT NULL</td>
+<td><code>home</code> / <code>away</code>. Home puts up first in match 1, then the sides alternate</td>
+</tr>
+<tr>
+<td>home_player_id, away_player_id</td>
+<td>UUID FK → players</td>
+<td>Indexed</td>
+</tr>
+<tr>
+<td>home_skill_level, away_skill_level</td>
+<td>SMALLINT</td>
+<td><strong>Snapshot</strong> at put-up</td>
+</tr>
+<tr>
+<td>home_race, away_race</td>
+<td>SMALLINT</td>
+<td><strong>Snapshot</strong> from <code>race_chart</code></td>
+</tr>
+<tr>
+<td>home_games, away_games</td>
+<td>SMALLINT ≥ 0</td>
+<td></td>
+</tr>
+<tr>
+<td>innings</td>
+<td>SMALLINT ≥ 0 NULL</td>
+<td>Shared by both players</td>
+</tr>
+<tr>
+<td>home_def_shots, away_def_shots</td>
+<td>SMALLINT ≥ 0</td>
+<td></td>
+</tr>
+<tr>
+<td>home_points, away_points</td>
+<td>SMALLINT</td>
+<td>Computed by trigger</td>
+</tr>
+<tr>
+<td>status</td>
+<td>TEXT CHECK <code>pending</code> | <code>complete</code></td>
+<td></td>
+</tr>
+<tr>
+<td>entered_by</td>
+<td>TEXT FK → users</td>
+<td></td>
+</tr>
+</tbody></table></div>
+<h4 id="players_stats-denormalized-trigger-maintained"><code>players_stats</code> (denormalized, trigger-maintained)</h4>
+<p>PK (<code>player_id</code>, <code>division_id</code>). Counters (INTEGER ≥ 0): <code>matches_played</code>, <code>matches_won</code>, <code>total_points</code>, <code>games_won</code>, <code>games_lost</code>, <code>innings</code>, <code>defensive_shots</code>, <code>shutouts</code>, plus <code>last_played_at</code>. CHECKs: <code>matches_won ≤ matches_played</code>, <code>shutouts ≤ matches_won</code>.</p>
+<h3 id="a4-seed-dbmigrationsseeds20261106_seedsql"><span class="secnum">6.A.4</span> Seed: <code>db/migrations/seeds/20261106_seed.sql</code></h3>
+<ul>
+<li>Season &quot;Fall 2026&quot; (active), division &quot;8-Ball Open&quot; (cap 23), venue &quot;Saigon Cue Club&quot; (District 1).</li>
+<li>Teams 03209, 03214, 03211, 03207 and 30 players. Two players are unpaid.</li>
+<li>The 23-Rule binds on purpose: 03209&#39;s five strongest players total 29 and 03211&#39;s total 27. 03207 totals 22 and is the control.</li>
+<li>Week-10 fixtures on 2026-11-10 19:30 +07.</li>
+<li>Dev identities <code>admin@example.test</code> (ADMIN) and <code>captain@example.test</code> (CAPTAIN, player 95007620). They can&#39;t sign in; they exist only for role checks.</li>
+<li><span class="badge b-caution">Caution</span> The seed inserts into <code>team_rosters</code>, which only exists in the planned 00002 file. <strong>As committed, the seed fails.</strong></li>
+</ul>
+<hr>
+<h2 id="b--planned-00002_business_rulessql-per-plan-2-must-be-restored"><span class="secnum">6.B</span> <span class="badge b-planned">Planned</span>: <code>00002_business_rules.sql</code> (per plan-2; must be restored)</h2>
+<h3 id="b1-team_rosters"><span class="secnum">6.B.1</span> <code>team_rosters</code></h3>
+<p>Links players to teams. Plan-1 specifies it as follows:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>team_id</td>
+<td>UUID FK → teams</td>
+<td>Partial index on <code>team_id</code></td>
+</tr>
+<tr>
+<td>player_id</td>
+<td>UUID FK → players</td>
+<td></td>
+</tr>
+<tr>
+<td>left_at</td>
+<td>TIMESTAMPTZ NULL</td>
+<td><code>NULL</code> = currently on the roster</td>
+</tr>
+</tbody></table></div>
+<p>The exact remaining columns (id, timestamps) were in the lost <code>00001</code> revision. Recreate them when the file is restored.</p>
+<ul>
+<li><strong>Transfers are close-then-open:</strong> set <code>left_at</code> on the old row and insert a new row. Never <code>UPDATE team_id</code>, so played matches stay reconstructable.</li>
+<li><strong>Planned index:</strong> a partial unique index on <code>player_id WHERE left_at IS NULL</code> gives each player <strong>one active roster in total</strong>.</li>
+</ul>
+<p><span class="badge b-caution">Caution</span><strong>Conflict with business rule R-013.</strong> The business docs allow a player on one team per <em>division</em>, so a Monday team and a Wednesday team at the same time is legal. The planned index allows only one active team overall. This is fine for the MVP (one division), but Phase 2 must change it to:</p>
+<div class="code"><span class="code-lang">sql</span><button class="copy" type="button">Copy</button><pre><code class="lang-sql">CREATE UNIQUE INDEX uq_roster_one_team_per_division
+  ON team_rosters (player_id, division_id)
+  WHERE left_at IS NULL;  -- division_id denormalized onto team_rosters</code></pre></div>
+<p>Tracked as <a href="14-open-questions.html">Q32</a>.</p>
+<h3 id="b2-trigger-chain-on-individual_matches"><span class="secnum">6.B.2</span> Trigger chain on <code>individual_matches</code></h3>
+<p>Same-event triggers fire in <strong>name order</strong>, so the numbers matter.</p>
+<figure class="diagram"><a class="diagram-img" href="assets/diagrams/06-data-model-2.svg" target="_blank" aria-label="Open diagram full screen"><img src="assets/diagrams/06-data-model-2.svg" alt="Diagram: 06 - Data Model (PostgreSQL)" loading="lazy" data-diagram-file="06-data-model-2.svg" width="1305" height="318"></a><figcaption><span></span><a class="full" href="assets/diagrams/06-data-model-2.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Function</th>
+<th>Rule</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>fn_snapshot_put_up()</code></td>
+<td>When both players are set and <code>home_skill_level IS NULL</code>, copy <code>players.skill_level</code> for both sides and look up both races. Runs once and never overwrites (R-050, R-125)</td>
+</tr>
+<tr>
+<td><code>fn_score_individual_match()</code></td>
+<td>Derives <code>status</code> and points. Shutout 3/0; loser on the hill (<code>loser_games ≥ loser_race − 1</code>) 2/1; else 2/0. <strong>Raises</strong> if games exceed a race or both players reached their race</td>
+</tr>
+<tr>
+<td><code>fn_roll_up_team_points()</code></td>
+<td>Sums the 5 rows into <code>team_matches.home_points</code> / <code>away_points</code></td>
+</tr>
+<tr>
+<td><code>fn_recompute_player_stats()</code></td>
+<td>Idempotent full recompute of <code>players_stats</code> per affected player (not a delta, so it can&#39;t drift)</td>
+</tr>
+<tr>
+<td><code>put_up_block_reason(team_match_id, side, player_id)</code></td>
+<td>Returns <code>would_break_23</code> | <code>already_put_up</code> | <code>not_on_roster</code> | <code>side_complete</code>, or NULL. Reads <code>divisions.skill_level_cap</code></td>
+</tr>
+<tr>
+<td><code>can_put_up(...)</code></td>
+<td><code>put_up_block_reason(...) IS NULL</code></td>
+</tr>
+<tr>
+<td><code>change_skill_level(player_id, new_sl, reason, changed_by)</code></td>
+<td>Validates the range, a non-blank reason, a known player and a real change. Writes history. Played matches keep their snapshot</td>
+</tr>
+</tbody></table></div>
+<h3 id="b3-views"><span class="secnum">6.B.3</span> Views</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>View</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>individual_match_sides</code></td>
+<td>One row per player appearance (UNION of the home and away sides), so &quot;won&quot; is defined once</td>
+</tr>
+<tr>
+<td><code>player_division_stats</code></td>
+<td><code>team_rosters</code> LEFT JOIN <code>players_stats</code>. An unplayed player shows zeros, not NULL. Feeds the roster MW/MP/points columns</td>
+</tr>
+<tr>
+<td><code>team_standings</code></td>
+<td>Counts only <code>submitted</code> team matches</td>
+</tr>
+</tbody></table></div>
+<h3 id="b4-status-checks"><span class="secnum">6.B.4</span> Status CHECKs</h3>
+<p><code>team_matches.status IN (&#39;scheduled&#39;,&#39;in_progress&#39;,&#39;submitted&#39;)</code>, plus the CHECK constraints that the last league-be commit dropped (plan-3 &quot;Phase 2 had to be restored first&quot;).</p>
+<hr>
+<h2 id="c--target-additions-later-phases"><span class="secnum">6.C</span> <span class="badge b-target">Target</span> additions (later phases)</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Addition</th>
+<th>Phase</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>player_skill_levels</code> (per format, with history) replacing <code>players.skill_level</code></td>
+<td>2</td>
+<td>9-Ball SL 1–9 alongside 8-Ball</td>
+</tr>
+<tr>
+<td><code>match_events</code> (append-only, <code>seq</code>, <code>idempotency_key</code>)</td>
+<td>2</td>
+<td>Live scoring (<a href="08-scorekeeping-engine.html">08</a>)</td>
+</tr>
+<tr>
+<td><code>racks</code> (outcome code, innings, DS, 9-Ball balls)</td>
+<td>2</td>
+<td>Rack-level data, BR/8OB accolades</td>
+</tr>
+<tr>
+<td>Coin flip columns on <code>team_matches</code></td>
+<td>2</td>
+<td>Put-up order by coin flip</td>
+</tr>
+<tr>
+<td><code>score_verifications</code>, <code>disputes</code></td>
+<td>2</td>
+<td>Dual-captain verification and bonus</td>
+</tr>
+<tr>
+<td><code>team_matches.home_bonus/away_bonus</code>, extra statuses <code>AWAITING_VERIFICATION</code>, <code>DISPUTED</code>, <code>FINALIZED_NO_BONUS</code>, <code>BYE</code>, <code>NO_PLAY</code></td>
+<td>2</td>
+<td>Verification and schedule banners</td>
+</tr>
+<tr>
+<td><code>fees</code>, <code>payments</code></td>
+<td>2</td>
+<td>MoMo / ZaloPay</td>
+</tr>
+<tr>
+<td><code>regions</code>, <code>venue_codes</code>, <code>id_sequences</code></td>
+<td>2</td>
+<td>Generated Member ID (<code>YYMMNNNN</code>) and Team ID (<code>RRVVT</code>)</td>
+</tr>
+<tr>
+<td><code>player_accolades</code></td>
+<td>2</td>
+<td>BR, 8OB, 9OB, Rackless, Double-strike</td>
+</tr>
+<tr>
+<td><code>audit_log</code></td>
+<td>2</td>
+<td>All admin actions (today only SL changes are recorded)</td>
+</tr>
+<tr>
+<td><code>tournaments</code>, <code>tournament_entries</code>, <code>bracket_matches</code></td>
+<td>3</td>
+<td>Tournaments tab</td>
+</tr>
+<tr>
+<td><code>leagues</code> (multi-LO tenancy)</td>
+<td>3</td>
+<td>Several operators / cities</td>
+</tr>
+</tbody></table></div>
+<h2 id="2-mapping-from-the-business-doc-schemas"><span class="secnum">6.2</span> Mapping from the business-doc schemas</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Business doc term</th>
+<th>Repo table/column</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Session</td>
+<td><code>seasons</code></td>
+</tr>
+<tr>
+<td>TEAM_MATCHES.status DONE/DUE</td>
+<td><code>team_matches.status</code> <code>submitted</code> / <code>scheduled</code></td>
+</tr>
+<tr>
+<td>INDIVIDUAL_MATCHES.home_gw_gn</td>
+<td><code>home_games</code> / <code>home_race</code></td>
+</tr>
+<tr>
+<td>GAME_DETAILS.innings_count, defensive_shots</td>
+<td><code>individual_matches.innings</code>, <code>home_def_shots</code> / <code>away_def_shots</code> (per match, not per rack, in the MVP)</td>
+</tr>
+<tr>
+<td>TEAM_ROSTERS.skill_level</td>
+<td>Snapshot on <code>individual_matches.home_skill_level</code>. Rosters hold no SL</td>
+</tr>
+<tr>
+<td>PLAYERS_SKILLS</td>
+<td><code>skill_level_history</code></td>
+</tr>
+<tr>
+<td>MATCH_SCORES (profile stats)</td>
+<td><code>players_stats</code> + <code>player_division_stats</code> view</td>
+</tr>
+<tr>
+<td>DEMO GAME_RACKS.win_reason_code</td>
+<td><span class="badge b-target">Target</span><code>racks.outcome_code</code> (Phase 2)</td>
+</tr>
+<tr>
+<td>USERS/ADMINS role</td>
+<td><code>users_roles</code> + <code>roles</code></td>
+</tr>
+</tbody></table></div>
+
+</article>
+</main>
+<script src="assets/site-data.js"></script>
+<script src="assets/layout.js"></script>
+<script src="assets/search-index.js"></script>
+<script src="assets/site.js"></script>
+</body>
+</html>

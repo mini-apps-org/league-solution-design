@@ -1,0 +1,431 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>22 - 9-Ball &amp; Handicap · MViP Solution Design</title>
+<link rel="stylesheet" href="../assets/site.css">
+<script src="../assets/boot.js"></script>
+</head>
+<body data-root="../" data-page="features/E09-nine-ball-handicap.html">
+<main id="main" class="content">
+<article class="doc">
+<h1>22 - 9-Ball &amp; Handicap</h1>
+<p class="lede">Epic E09 · 2 features</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Goal</strong></td>
+<td>Run 9-Ball divisions with point-based scoring and the 20-point split, and keep every player&#39;s skill level honest with data-driven suggestions</td>
+</tr>
+<tr>
+<td><strong>Phase</strong></td>
+<td>2</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><span class="badge b-target">Target</span> Not started. Phase 1 is 8-Ball only, with manual SL changes (<a href="E05-roster-admin.html#f18">E05-F18</a>)</td>
+</tr>
+<tr>
+<td><strong>Actors</strong></td>
+<td>Scorekeeper, Captains, Admin</td>
+</tr>
+<tr>
+<td><strong>Related</strong></td>
+<td><a href="../04-domain-rules.html">04 §6, §10</a> · <a href="../08-scorekeeping-engine.html">08 §4.2</a> · <a href="../appendix-rule-tables.html">appendix rule tables</a></td>
+</tr>
+</tbody></table></div>
+<h2 id="features-by-phase"><span class="secnum">22.1</span> Features by phase</h2>
+<h3 id="phase-1"><span class="secnum">22.1.1</span> Phase 1</h3>
+<p>Nothing. <code>divisions.format</code> is <code>8_ball</code> only; SL is one number per player.</p>
+<h3 id="phase-2"><span class="secnum">22.1.2</span> Phase 2</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>Feature</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">F32</td>
+<td><a href="E09-nine-ball-handicap.html#f32">9-Ball scoring + per-format SL</a></td>
+<td><span class="badge b-target">Target</span></td>
+</tr>
+<tr>
+<td class="nw">F33</td>
+<td><a href="E09-nine-ball-handicap.html#f33">Skill-level suggestions</a></td>
+<td><span class="badge b-target">Target</span></td>
+</tr>
+</tbody></table></div>
+<h2 id="phase-2-deep-dive"><span class="secnum">22.2</span> Phase 2 deep dive</h2>
+<h3 id="8-ball-vs-9-ball-at-a-glance"><span class="secnum">22.2.1</span> 8-Ball vs 9-Ball at a glance</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th></th>
+<th>8-Ball (Phase 1)</th>
+<th>9-Ball (F32)</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>SL range</td>
+<td>2–7</td>
+<td>1–9</td>
+</tr>
+<tr>
+<td>Match goal</td>
+<td>Race in games (race chart)</td>
+<td>Target in points (14…75 by SL)</td>
+</tr>
+<tr>
+<td>Rack</td>
+<td>Win or lose the rack</td>
+<td>Balls 1–8 = 1 point, 9 = 2 points, 10 per rack</td>
+</tr>
+<tr>
+<td>Team points per match</td>
+<td>3/0 · 2/1 · 2/0</td>
+<td>20-point split from the loser&#39;s SL and score</td>
+</tr>
+<tr>
+<td>Max per night</td>
+<td>15 + 1 bonus</td>
+<td>100 + 10 bonus</td>
+</tr>
+<tr>
+<td>Team SL cap</td>
+<td>23</td>
+<td>23 (bylaw)</td>
+</tr>
+<tr>
+<td>SL basis (F33)</td>
+<td>Effective innings per won game, last 10 wins</td>
+<td>Points per inning (PPI), last 10 matches</td>
+</tr>
+</tbody></table></div>
+<h3 id="components"><span class="secnum">22.2.2</span> Components</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E09-nine-ball-handicap-1.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E09-nine-ball-handicap-1.svg" alt="Diagram: 22 - 9-Ball &amp; Handicap" loading="lazy" data-diagram-file="features_E09-nine-ball-handicap-1.svg" width="1159" height="756"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_E09-nine-ball-handicap-1.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="data-delta"><span class="secnum">22.2.3</span> Data delta</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Object</th>
+<th>Change</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>divisions.format</code></td>
+<td><code>8_ball</code> · <code>9_ball</code></td>
+</tr>
+<tr>
+<td><code>player_skill_levels</code></td>
+<td>+ <code>format</code>; current SL is per <code>(player_id, format)</code></td>
+</tr>
+<tr>
+<td><code>individual_matches</code></td>
+<td>+ <code>target_home</code>, <code>target_away</code>, <code>points_scored_home/away</code> (9-Ball)</td>
+</tr>
+<tr>
+<td><code>nine_ball_targets (sl, target)</code>, <code>nine_ball_points (loser_sl, min_score, max_score, loser_pts)</code></td>
+<td>Seeded reference tables, tested for contiguity</td>
+</tr>
+<tr>
+<td><code>racks</code></td>
+<td>+ <code>balls jsonb</code>, <code>dead_balls int</code> (9-Ball)</td>
+</tr>
+<tr>
+<td><code>sl_suggestions (id, player_id, format, current_sl, suggested_sl, basis jsonb, status, decided_by, decided_at)</code></td>
+<td class="nw">F33</td>
+</tr>
+</tbody></table></div>
+
+<h2 id="f32"><span class="secnum">22.3</span> F32 — 9-Ball scoring + per-format SL</h2>
+<section class="feature"><div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>Status</th>
+<th>Rules</th>
+<th>Repo refs</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>2</td>
+<td><span class="badge b-target">Target</span></td>
+<td>R-080–R-085, R-090, R-091 · <a href="../04-domain-rules.html">04 §6</a> · <a href="../08-scorekeeping-engine.html">08 §4.2</a></td>
+<td>—</td>
+</tr>
+</tbody></table></div>
+<h3 id="f32-requirements"><span class="secnum">22.3.1</span> Requirements</h3>
+<p><em>As a scorekeeper in a 9-Ball division, I tap each ball as it&#39;s pocketed. The app keeps both players&#39; points against their SL targets and splits 20 team points correctly at the end.</em></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Requirement</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">FR-32.1</td>
+<td>Divisions have <code>format</code>. A player has one current SL <strong>per format</strong> (8-Ball 2–7, 9-Ball 1–9); SL history is kept per format</td>
+</tr>
+<tr>
+<td class="nw">FR-32.2</td>
+<td>Targets by SL: 1→14, 2→19, 3→25, 4→31, 5→38, 6→46, 7→55, 8→65, 9→75</td>
+</tr>
+<tr>
+<td class="nw">FR-32.3</td>
+<td>Live screen: a 9-ball rack grid (balls 1–9). Tapping a ball credits the <strong>active</strong> player: 1 point, or 2 for the 9 (R-080)</td>
+</tr>
+<tr>
+<td class="nw">FR-32.4</td>
+<td><strong>Dead ball</strong> (<code>DEAD_BALL {ball}</code>): balls 1–8 pocketed on a foul count for nobody. The 9 is never dead; on a foul it&#39;s re-spotted and nothing is recorded (R-081, R-082)</td>
+</tr>
+<tr>
+<td class="nw">FR-32.5</td>
+<td>A rack closes when the 9 is credited. Unaccounted balls are offered as &quot;mark as dead?&quot; so that points A + points B + dead = 10 (R-085)</td>
+</tr>
+<tr>
+<td class="nw">FR-32.6</td>
+<td>The match ends the moment a player reaches their target; the recorded score is <strong>capped</strong> at the target (R-083)</td>
+</tr>
+<tr>
+<td class="nw">FR-32.7</td>
+<td>Team points: <code>loserPts = lookup(loserSL, loserScore)</code> from the 20-point table; <code>winnerPts = 20 − loserPts</code>. PA = 20 per match (R-091)</td>
+</tr>
+<tr>
+<td class="nw">FR-32.8</td>
+<td>Accolades: <code>9OB</code> (9 on a legal break) and <code>BR</code> (R-084); ball points still count</td>
+</tr>
+<tr>
+<td class="nw">FR-32.9</td>
+<td>Innings, DS and time-outs work as in 8-Ball (F27)</td>
+</tr>
+<tr>
+<td class="nw">FR-32.10</td>
+<td>The 23 SL cap and the put-up rules use the 9-Ball SL in 9-Ball divisions</td>
+</tr>
+</tbody></table></div>
+<h3 id="f32-logic"><span class="secnum">22.3.2</span> Logic</h3>
+<h4 id="f32-ball-event-reducer">Ball event reducer</h4>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E09-nine-ball-handicap-f32-1.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E09-nine-ball-handicap-f32-1.svg" alt="Diagram: 22 - 9-Ball &amp; Handicap" loading="lazy" data-diagram-file="features_E09-nine-ball-handicap-f32-1.svg" width="861" height="1166"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_E09-nine-ball-handicap-f32-1.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h4 id="f32-20-point-split-lookup">20-point split lookup</h4>
+<div class="code"><span class="code-lang">text</span><button class="copy" type="button">Copy</button><pre><code class="lang-text">points9(loserSL, loserScore):
+  row = nine_ball_points where loser_sl = loserSL
+                           and loserScore between min_score and max_score
+  return (20 - row.loser_pts, row.loser_pts)
+
+example: loser SL3 scored 21 → band 20–21 → 13 / 7</code></pre></div>
+<h3 id="f32-flow"><span class="secnum">22.3.3</span> Flow</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E09-nine-ball-handicap-f32-2.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E09-nine-ball-handicap-f32-2.svg" alt="Diagram: 22 - 9-Ball &amp; Handicap" loading="lazy" data-diagram-file="features_E09-nine-ball-handicap-f32-2.svg" width="1096" height="542"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_E09-nine-ball-handicap-f32-2.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="f32-ui"><span class="secnum">22.3.4</span> UI</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Element</th>
+<th>Detail</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Ball grid</td>
+<td>Nine round buttons (56 px) with standard ball colours and numbers. A pocketed ball shows the scorer&#39;s initial; a dead ball is struck through</td>
+</tr>
+<tr>
+<td>Score bar</td>
+<td><code>31 / 38</code> with a progress bar per player and the points still needed</td>
+</tr>
+<tr>
+<td>Rack close</td>
+<td>When the 9 is tapped, a sheet lists unaccounted balls: &quot;Mark 3 and 6 as dead?&quot;</td>
+</tr>
+<tr>
+<td>Breakdown (R-144)</td>
+<td>Points/target per player, e.g. <code>38/38 – 21/25</code>, and team points</td>
+</tr>
+</tbody></table></div>
+<h3 id="f32-edge-cases"><span class="secnum">22.3.5</span> Edge cases</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Situation</th>
+<th>Expected</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">EC-32.1</td>
+<td>9 pocketed on a foul</td>
+<td>Not dead; re-spot; no points; the rack continues (<a href="../08-scorekeeping-engine.html">08 §8 #4</a>)</td>
+</tr>
+<tr>
+<td class="nw">EC-32.2</td>
+<td>Player at 37/38 makes the 9</td>
+<td>Recorded 38, the match ends (<a href="../08-scorekeeping-engine.html">08 §8 #5</a>)</td>
+</tr>
+<tr>
+<td class="nw">EC-32.3</td>
+<td>Loser scored 0</td>
+<td>20/0</td>
+</tr>
+<tr>
+<td class="nw">EC-32.4</td>
+<td>Player has no 9-Ball SL yet</td>
+<td>Put-up blocked with &quot;No 9-Ball skill level&quot;; admin sets one</td>
+</tr>
+<tr>
+<td class="nw">EC-32.5</td>
+<td>Forfeit in 9-Ball</td>
+<td>20/0, no MP (F39b)</td>
+</tr>
+</tbody></table></div>
+<h3 id="f32-acceptance-criteria"><span class="secnum">22.3.6</span> Acceptance criteria</h3>
+<ul>
+<li><strong>AC-32.1</strong> Given the 20-point table, then every SL row covers <code>0 … target − 1</code> with no gaps or overlaps (unit test).</li>
+<li><strong>AC-32.2</strong> Given a rack where A scores 6, B scores 2 and 2 balls are dead, then the rack is valid (6 + 2 + 2 = 10).</li>
+<li><strong>AC-32.3</strong> Given loser SL3 with 21 points, then team points are 13–7.</li>
+</ul>
+<h3 id="f32-open-questions"><span class="secnum">22.3.7</span> Open questions</h3>
+<ul>
+<li>Time-outs per rack for 9-Ball (R-104 default).</li>
+<li>Is the team SL cap also 23 for 9-Ball?</li>
+</ul>
+</section>
+
+<h2 id="f33"><span class="secnum">22.4</span> F33 — Skill-level suggestions</h2>
+<section class="feature"><div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>Status</th>
+<th>Rules</th>
+<th>Repo refs</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>2</td>
+<td><span class="badge b-target">Target</span></td>
+<td>R-120–R-126 · <a href="../04-domain-rules.html">04 §10</a></td>
+<td>Phase 1: manual change via <code>change_skill_level()</code> (<a href="E05-roster-admin.html#f18">E05-F18</a>)</td>
+</tr>
+</tbody></table></div>
+<h3 id="f33-requirements"><span class="secnum">22.4.1</span> Requirements</h3>
+<p><em>As an admin, after each night the system tells me whose skill level looks wrong, why, and lets me apply the change in one tap with the same history and audit as a manual change.</em></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Requirement</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">FR-33.1</td>
+<td>After each finalized night (outbox <code>TeamMatchFinalized</code>), the worker recomputes the suggested SL for every player who played</td>
+</tr>
+<tr>
+<td class="nw">FR-33.2</td>
+<td><strong>8-Ball basis (R-121):</strong> over the last 10 won matches, <code>avg(effective innings per game won)</code>, where effective innings = innings − DS</td>
+</tr>
+<tr>
+<td class="nw">FR-33.3</td>
+<td><strong>9-Ball basis (R-122):</strong> over the last 10 matches, <code>PPI = Σ points ÷ Σ (innings − DS)</code></td>
+</tr>
+<tr>
+<td class="nw">FR-33.4</td>
+<td>Thresholds map the basis to an SL. They&#39;re stored in <code>sl_thresholds (format, sl, min_value, max_value)</code> and configurable; R-123 says the sources don&#39;t give them, so defaults are seeded and marked <span class="badge b-assumption">Assumption</span></td>
+</tr>
+<tr>
+<td class="nw">FR-33.5</td>
+<td>A suggestion is created only when <code>suggested ≠ current</code> <strong>and</strong> the player has at least 5 qualifying matches (configurable). An existing pending suggestion for the same player and format is replaced</td>
+</tr>
+<tr>
+<td class="nw">FR-33.6</td>
+<td>The admin queue shows the player, format, current → suggested, the basis (window, values) and a sparkline. Actions: <strong>Apply</strong> (calls <code>change_skill_level</code> with reason &quot;Suggested: {basis}&quot;), <strong>Dismiss</strong> (reason required), <strong>Snooze 2 weeks</strong></td>
+</tr>
+<tr>
+<td class="nw">FR-33.7</td>
+<td>Applied changes follow R-050/R-125: matches already started keep their snapshot; later put-ups use the new SL</td>
+</tr>
+<tr>
+<td class="nw">FR-33.8</td>
+<td>No auto-apply in Phase 2 (R-123); every change needs an admin</td>
+</tr>
+</tbody></table></div>
+<h3 id="f33-logic"><span class="secnum">22.4.2</span> Logic</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E09-nine-ball-handicap-f33-1.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E09-nine-ball-handicap-f33-1.svg" alt="Diagram: 22 - 9-Ball &amp; Handicap" loading="lazy" data-diagram-file="features_E09-nine-ball-handicap-f33-1.svg" width="675" height="1293"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_E09-nine-ball-handicap-f33-1.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="f33-flow"><span class="secnum">22.4.3</span> Flow</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E09-nine-ball-handicap-f33-2.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E09-nine-ball-handicap-f33-2.svg" alt="Diagram: 22 - 9-Ball &amp; Handicap" loading="lazy" data-diagram-file="features_E09-nine-ball-handicap-f33-2.svg" width="1084" height="553"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_E09-nine-ball-handicap-f33-2.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="f33-api--data"><span class="secnum">22.4.4</span> API &amp; data</h3>
+<div class="code"><span class="code-lang">json</span><button class="copy" type="button">Copy</button><pre><code class="lang-json">{
+  &quot;id&quot;: &quot;&lt;suggestion-uuid&gt;&quot;,
+  &quot;playerId&quot;: &quot;&lt;player-uuid&gt;&quot;,
+  &quot;format&quot;: &quot;8_ball&quot;,
+  &quot;currentSl&quot;: 4,
+  &quot;suggestedSl&quot;: 5,
+  &quot;basis&quot;: { &quot;window&quot;: 10, &quot;metric&quot;: &quot;effective_innings_per_win&quot;, &quot;value&quot;: 3.1 },
+  &quot;status&quot;: &quot;pending&quot;
+}</code></pre></div>
+<h3 id="f33-edge-cases"><span class="secnum">22.4.5</span> Edge cases</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Situation</th>
+<th>Expected</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">EC-33.1</td>
+<td>New player with 2 matches</td>
+<td>No suggestion yet</td>
+</tr>
+<tr>
+<td class="nw">EC-33.2</td>
+<td>Admin changes the SL manually while a suggestion is pending</td>
+<td>The suggestion is marked superseded</td>
+</tr>
+<tr>
+<td class="nw">EC-33.3</td>
+<td>Matches finished by manual entry (no innings data)</td>
+<td>Excluded from the basis</td>
+</tr>
+<tr>
+<td class="nw">EC-33.4</td>
+<td>Suggestion swings back and forth every week</td>
+<td>Snooze; consider a hysteresis band in the thresholds</td>
+</tr>
+</tbody></table></div>
+<h3 id="f33-acceptance-criteria"><span class="secnum">22.4.6</span> Acceptance criteria</h3>
+<ul>
+<li><strong>AC-33.1</strong> Given a fixture of 10 wins with known innings and DS, then the computed basis matches the expected value to 2 decimals.</li>
+<li><strong>AC-33.2</strong> Given Apply, then <code>player_skill_levels</code> has a new row, <code>audit_log</code> records it, and the suggestion is <code>applied</code>.</li>
+</ul>
+<h3 id="f33-open-questions"><span class="secnum">22.4.7</span> Open questions</h3>
+<ul>
+<li>The real threshold values (R-123) must come from the league.</li>
+</ul>
+</section>
+
+</article>
+</main>
+<script src="../assets/site-data.js"></script>
+<script src="../assets/layout.js"></script>
+<script src="../assets/search-index.js"></script>
+<script src="../assets/site.js"></script>
+</body>
+</html>

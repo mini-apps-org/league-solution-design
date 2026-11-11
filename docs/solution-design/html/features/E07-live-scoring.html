@@ -1,0 +1,899 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>20 - Live Scoring · MViP Solution Design</title>
+<link rel="stylesheet" href="../assets/site.css">
+<script src="../assets/boot.js"></script>
+</head>
+<body data-root="../" data-page="features/E07-live-scoring.html">
+<main id="main" class="content">
+<article class="doc">
+<h1>20 - Live Scoring</h1>
+<p class="lede">Epic E07 · 5 features</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Goal</strong></td>
+<td>Replace &quot;type the final score&quot; with shot-by-shot scoring on one phone per table: coin flip, lag, every turn, every rack, accolades. It works offline, and everyone else watches live</td>
+</tr>
+<tr>
+<td><strong>Phase</strong></td>
+<td>2 (all features)</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><span class="badge b-target">Target</span> Not started. Builds on the E04 put-up/result model and the E06-F42 worker + Redis</td>
+</tr>
+<tr>
+<td><strong>Actors</strong></td>
+<td>Scorekeeper (usually a captain), Captains, Live viewers, Admin</td>
+</tr>
+<tr>
+<td><strong>Related</strong></td>
+<td><a href="../08-scorekeeping-engine.html">08 scorekeeping engine</a> · <a href="../04-domain-rules.html">04 §5, §7, §9</a> · <a href="../06-data-model.html">06 §C</a> · <a href="../07-api-design.html">07 §4</a></td>
+</tr>
+</tbody></table></div>
+<h2 id="features-by-phase"><span class="secnum">20.1</span> Features by phase</h2>
+<h3 id="phase-1"><span class="secnum">20.1.1</span> Phase 1</h3>
+<p>Nothing. Phase 1 records only the final games per match (<a href="E04-night-operations.html#f14">E04-F14</a>). Every Phase 2 feature below must keep that path working as a fallback (&quot;Enter final score instead&quot;).</p>
+<h3 id="phase-2"><span class="secnum">20.1.2</span> Phase 2</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>Feature</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">F26</td>
+<td><a href="E07-live-scoring.html#f26">Coin flip &amp; lag</a></td>
+<td><span class="badge b-target">Target</span></td>
+</tr>
+<tr>
+<td class="nw">F27</td>
+<td><a href="E07-live-scoring.html#f27">Live 8-Ball scoring</a></td>
+<td><span class="badge b-target">Target</span></td>
+</tr>
+<tr>
+<td class="nw">F28</td>
+<td><a href="E07-live-scoring.html#f28">Racks &amp; accolades</a></td>
+<td><span class="badge b-target">Target</span></td>
+</tr>
+<tr>
+<td class="nw">F29</td>
+<td><a href="E07-live-scoring.html#f29">Offline scoring sync</a></td>
+<td><span class="badge b-target">Target</span></td>
+</tr>
+<tr>
+<td class="nw">F30</td>
+<td><a href="E07-live-scoring.html#f30">Scoring lease &amp; live viewers</a></td>
+<td><span class="badge b-target">Target</span></td>
+</tr>
+</tbody></table></div>
+<h2 id="phase-2-deep-dive"><span class="secnum">20.2</span> Phase 2 deep dive</h2>
+<h3 id="the-model-in-one-sentence"><span class="secnum">20.2.1</span> The model in one sentence</h3>
+<p>Every tap is an immutable <strong>event</strong>. A pure <strong>reducer</strong>, the same in TypeScript and Go and tested with shared JSON fixtures, folds events into the live state. The server owns ordering (<code>seq</code>), stores events in Postgres, and fans state out through Redis.</p>
+<h3 id="components"><span class="secnum">20.2.2</span> Components</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E07-live-scoring-1.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E07-live-scoring-1.svg" alt="Diagram: 20 - Live Scoring" loading="lazy" data-diagram-file="features_E07-live-scoring-1.svg" width="2079" height="502"></a><figcaption><span>Thick path: a tap goes from the scorer&#39;s phone to the authoritative log. The right-hand loop fans the new state out to viewers.</span><a class="full" href="../assets/diagrams/features_E07-live-scoring-1.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="one-rack-end-to-end"><span class="secnum">20.2.3</span> One rack, end to end</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E07-live-scoring-2.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E07-live-scoring-2.svg" alt="Diagram: 20 - Live Scoring" loading="lazy" data-diagram-file="features_E07-live-scoring-2.svg" width="1708" height="806"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_E07-live-scoring-2.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="individual-match-states"><span class="secnum">20.2.4</span> Individual-match states</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E07-live-scoring-3.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E07-live-scoring-3.svg" alt="Diagram: 20 - Live Scoring" loading="lazy" data-diagram-file="features_E07-live-scoring-3.svg" width="987" height="200"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_E07-live-scoring-3.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="data-delta"><span class="secnum">20.2.5</span> Data delta</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Object</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>match_events (id, team_match_id, individual_match_id, seq, type, payload jsonb, idempotency_key UNIQUE, device_id, actor_user_id, client_ts, server_ts, undone_by_seq)</code></td>
+<td>Append-only log, <code>UNIQUE (team_match_id, seq)</code></td>
+</tr>
+<tr>
+<td><code>team_matches.state_version int</code></td>
+<td>Optimistic concurrency (<code>expectedSeq</code>)</td>
+</tr>
+<tr>
+<td><code>racks (individual_match_id, rack_no, breaker_side, winner_side, outcome, innings, ds_home, ds_away)</code></td>
+<td>Projection for stats and the breakdown screen</td>
+</tr>
+<tr>
+<td><code>individual_matches</code> + <code>lag_winner_side, breaker_side, innings, ds_home, ds_away, scorekeeper_name</code></td>
+<td>Projection</td>
+</tr>
+<tr>
+<td><code>player_accolades (player_id, team_match_id, individual_match_id, code, rack_no)</code></td>
+<td>BR · 8OB · RACKLESS · DOUBLE_STRIKE</td>
+</tr>
+<tr>
+<td>Redis <code>live:{teamMatchId}</code>, <code>lease:individual:{id}</code>, channel <code>match:{teamMatchId}</code></td>
+<td>Ephemeral, rebuildable from Postgres</td>
+</tr>
+</tbody></table></div>
+<h3 id="api-surface"><span class="secnum">20.2.6</span> API surface</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Path</th>
+<th>Feature</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>POST</code></td>
+<td><code>/api/v1/team-matches/{id}/coin-flip</code></td>
+<td class="nw">F26</td>
+</tr>
+<tr>
+<td><code>POST</code></td>
+<td><code>/api/v1/team-matches/{id}/events</code></td>
+<td>F26–F29</td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/api/v1/team-matches/{id}/events?after={seq}</code></td>
+<td>F29 rebase</td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/api/v1/team-matches/{id}/live</code></td>
+<td>F30 snapshot</td>
+</tr>
+<tr>
+<td><code>POST</code></td>
+<td><code>/api/v1/individual-matches/{id}/lease</code> · <code>:takeover</code></td>
+<td class="nw">F30</td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/ws/team-matches/{id}</code></td>
+<td class="nw">F30</td>
+</tr>
+</tbody></table></div>
+
+<h2 id="f26"><span class="secnum">20.3</span> F26 — Coin flip &amp; lag</h2>
+<section class="feature"><div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>Status</th>
+<th>Rules</th>
+<th>Repo refs</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>2</td>
+<td><span class="badge b-target">Target</span></td>
+<td>R-030, R-031, R-100 · <a href="../08-scorekeeping-engine.html">08 §2–§3</a></td>
+<td>Phase 1 analogue: <code>firstPutUpFor(order)</code> in <code>_parked/src/lib/night.ts</code> (odd → home)</td>
+</tr>
+</tbody></table></div>
+<h3 id="f26-requirements"><span class="secnum">20.3.1</span> Requirements</h3>
+<p><em>As a scorekeeper, I record who won the coin flip (that decides who puts up first) and, for each match, who won the lag (that decides who breaks and how innings are counted).</em></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Requirement</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">FR-26.1</td>
+<td>Before match 1, the night records a <strong>coin flip</strong>: `{winnerTeamId, choice: &quot;put_up_first&quot;</td>
+</tr>
+<tr>
+<td class="nw">FR-26.2</td>
+<td>The coin flip replaces the Phase 1 fixed rule (odd orders home). After it, put-up order alternates: the starting team puts up in orders 1, 3, 5 and the other team in 2, 4 (R-030/R-031)</td>
+</tr>
+<tr>
+<td class="nw">FR-26.3</td>
+<td>After both players of a slot are up, the match enters <strong>Lag</strong>: the scorer taps the lag winner, then the lag winner&#39;s choice of breaker (usually themselves)</td>
+</tr>
+<tr>
+<td class="nw">FR-26.4</td>
+<td><code>LAG_RECORDED {winnerPlayerId, breakerPlayerId}</code> sets <code>breaker</code>, <code>activePlayer = breaker</code>, and <code>secondShooter = lag loser</code> (innings increment when the lag loser&#39;s turn ends, R-100)</td>
+</tr>
+<tr>
+<td class="nw">FR-26.5</td>
+<td>Rack-to-rack break rule per division bylaw: <code>winner_breaks</code> (APA 8-Ball default) or <code>alternate</code></td>
+</tr>
+<tr>
+<td class="nw">FR-26.6</td>
+<td>The scorekeeper&#39;s name is recorded per individual match (R-105), prefilled with the device user&#39;s name</td>
+</tr>
+<tr>
+<td class="nw">FR-26.7</td>
+<td>Undo is allowed for the lag until the first shot event of rack 1</td>
+</tr>
+</tbody></table></div>
+<h3 id="f26-logic"><span class="secnum">20.3.2</span> Logic</h3>
+<h4 id="f26-coin-flip--put-up-order">Coin flip → put-up order</h4>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E07-live-scoring-f26-1.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E07-live-scoring-f26-1.svg" alt="Diagram: 20 - Live Scoring" loading="lazy" data-diagram-file="features_E07-live-scoring-f26-1.svg" width="405" height="687"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_E07-live-scoring-f26-1.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h4 id="f26-lag--breaker-and-innings-side">Lag → breaker and innings side</h4>
+<div class="code"><span class="code-lang">text</span><button class="copy" type="button">Copy</button><pre><code class="lang-text">on LAG_RECORDED(winner, breaker):
+  assert status == LAG and breaker in {home, away}
+  lagWinner     = side(winner)
+  secondShooter = other(lagWinner)            # R-100, innings side
+  rack          = { no: 1, breaker: side(breaker), firstTurnLive: true,
+                    timeoutsLeft: timeouts(SL) }  # R-104
+  activePlayer  = side(breaker)
+  status        = IN_PROGRESS</code></pre></div>
+<h3 id="f26-flow"><span class="secnum">20.3.3</span> Flow</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E07-live-scoring-f26-2.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E07-live-scoring-f26-2.svg" alt="Diagram: 20 - Live Scoring" loading="lazy" data-diagram-file="features_E07-live-scoring-f26-2.svg" width="1355" height="600"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_E07-live-scoring-f26-2.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="f26-ui"><span class="secnum">20.3.4</span> UI</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Screen</th>
+<th>Content</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Coin flip sheet</td>
+<td>Two big team buttons (&quot;Who won the toss?&quot;), then two choices (&quot;Put up first&quot; / &quot;Let them put up first&quot;). Confirm</td>
+</tr>
+<tr>
+<td>Lag sheet</td>
+<td>The two put-up players as large cards with SL and race (&quot;needs 4&quot;); tap the lag winner, then &quot;Who breaks?&quot; defaulting to the winner</td>
+</tr>
+<tr>
+<td>Header after lag</td>
+<td>A &quot;LAG&quot; badge on the lag winner (R-144) and a break icon on the current breaker</td>
+</tr>
+</tbody></table></div>
+<h3 id="f26-api--data"><span class="secnum">20.3.5</span> API &amp; data</h3>
+<div class="code"><span class="code-lang">json</span><button class="copy" type="button">Copy</button><pre><code class="lang-json">{
+  &quot;idempotencyKey&quot;: &quot;&lt;uuid&gt;&quot;,
+  &quot;teamMatchId&quot;: &quot;&lt;team-match-uuid&gt;&quot;,
+  &quot;expectedSeq&quot;: 12,
+  &quot;deviceId&quot;: &quot;&lt;device-uuid&gt;&quot;,
+  &quot;clientTs&quot;: &quot;2026-11-10T19:41:03+07:00&quot;,
+  &quot;type&quot;: &quot;LAG_RECORDED&quot;,
+  &quot;payload&quot;: { &quot;winnerPlayerId&quot;: &quot;&lt;player-uuid&gt;&quot;, &quot;breakerPlayerId&quot;: &quot;&lt;player-uuid&gt;&quot; }
+}</code></pre></div>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Error</th>
+<th>When</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>40910</code></td>
+<td>Coin flip already recorded</td>
+</tr>
+<tr>
+<td><code>40911</code></td>
+<td>Lag sent while the slot isn&#39;t in <code>LAG</code></td>
+</tr>
+<tr>
+<td><code>40003</code></td>
+<td>The winner or breaker isn&#39;t one of the two players</td>
+</tr>
+</tbody></table></div>
+<h3 id="f26-edge-cases"><span class="secnum">20.3.6</span> Edge cases</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Situation</th>
+<th>Expected</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">EC-26.1</td>
+<td>Coin flip skipped (old client or Phase 1 fallback)</td>
+<td>Default to Phase 1 alternation (odd → home)</td>
+</tr>
+<tr>
+<td class="nw">EC-26.2</td>
+<td>Lag winner chooses the opponent to break</td>
+<td>Allowed: <code>breaker = other(lagWinner)</code>; <code>secondShooter</code> stays the lag loser</td>
+</tr>
+<tr>
+<td class="nw">EC-26.3</td>
+<td>Wrong lag winner tapped</td>
+<td>Undo before the first shot; after that, an admin correction only</td>
+</tr>
+<tr>
+<td class="nw">EC-26.4</td>
+<td>Forfeited slot (F39b)</td>
+<td>No lag; the slot goes straight to <code>MATCH_DONE</code></td>
+</tr>
+</tbody></table></div>
+<h3 id="f26-acceptance-criteria"><span class="secnum">20.3.7</span> Acceptance criteria</h3>
+<ul>
+<li><strong>AC-26.1</strong> Given away wins the toss and chooses to put up first, then the put-up order is away in 1, 3, 5 and home in 2, 4.</li>
+<li><strong>AC-26.2</strong> Given home wins the lag, when the away player&#39;s turn ends, then innings = 1, and when the home player&#39;s turn ends first, innings stays 0.</li>
+<li><strong>AC-26.3</strong> Given a recorded lag and no shot yet, when Undo is tapped, then the slot returns to <code>LAG</code>.</li>
+</ul>
+<h3 id="f26-open-questions"><span class="secnum">20.3.8</span> Open questions</h3>
+<ul>
+<li>Does the league use &quot;winner breaks&quot; or &quot;alternate break&quot; for 8-Ball? (Bylaw per division; default winner breaks.)</li>
+</ul>
+</section>
+
+<h2 id="f27"><span class="secnum">20.4</span> F27 — Live 8-Ball scoring</h2>
+<section class="feature"><div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>Status</th>
+<th>Rules</th>
+<th>Repo refs</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>2</td>
+<td><span class="badge b-target">Target</span></td>
+<td>R-060–R-062, R-100–R-106, R-050 · <a href="../08-scorekeeping-engine.html">08 §4.1</a></td>
+<td>Phase 1 analogue: <code>pointsFor()</code> in <code>_parked/src/lib/rules.ts</code></td>
+</tr>
+</tbody></table></div>
+<h3 id="f27-requirements"><span class="secnum">20.4.1</span> Requirements</h3>
+<p><em>As a scorekeeper, I tap through each turn of an 8-Ball match on one screen, and the app tracks games, innings, defensive shots and time-outs exactly as the paper scoresheet would.</em></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Requirement</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">FR-27.1</td>
+<td>The live screen shows both players (name, SL, games won / needed, DS count, time-outs left), the <strong>active player</strong> highlighted, rack number, match innings and a shot timer (informational, R-106)</td>
+</tr>
+<tr>
+<td class="nw">FR-27.2</td>
+<td>Actions for the active player: <strong>Turn Over</strong>, <strong>Defensive Shot</strong>, <strong>Time-out</strong>, <strong>End Rack…</strong></td>
+</tr>
+<tr>
+<td class="nw">FR-27.3</td>
+<td><code>TURN_OVER(p)</code>: <code>p</code> must be active. Sets <code>firstTurnLive = false</code>. If <code>p == secondShooter</code>, then <code>innings++</code>. Switches the active player (R-100, R-101)</td>
+</tr>
+<tr>
+<td class="nw">FR-27.4</td>
+<td><code>DEFENSIVE_SHOT(p)</code>: <code>ds[p]++</code>, then the same effect as Turn Over (R-102)</td>
+</tr>
+<tr>
+<td class="nw">FR-27.5</td>
+<td><code>TIMEOUT(p)</code>: only if <code>timeoutsLeft[p] &gt; 0</code>; resets every rack. SL ≤ 3 → 2, SL ≥ 4 → 1 (R-104, configurable)</td>
+</tr>
+<tr>
+<td class="nw">FR-27.6</td>
+<td>The match completes when a player reaches their race. Points use the same <code>points8</code> as Phase 1: 3/0 shutout, 2/1 hill-hill (loser = race − 1), otherwise 2/0</td>
+</tr>
+<tr>
+<td class="nw">FR-27.7</td>
+<td><strong>Undo</strong> reverts only the last non-undone event of the match (<code>UNDO {revertsSeq}</code>); the projection is re-reduced. Undo after the match-ending rack re-opens the match and clears its points</td>
+</tr>
+<tr>
+<td class="nw">FR-27.8</td>
+<td><strong>Switch active player</strong> in the ⋮ menu corrects a wrong state without undoing (R-062)</td>
+</tr>
+<tr>
+<td class="nw">FR-27.9</td>
+<td>Races come from the SL <strong>snapshot</strong> taken at put-up (R-125). An SL change mid-night affects later slots only (R-050)</td>
+</tr>
+</tbody></table></div>
+<h3 id="f27-logic-turn-reducer"><span class="secnum">20.4.2</span> Logic: turn reducer</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E07-live-scoring-f27-1.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E07-live-scoring-f27-1.svg" alt="Diagram: 20 - Live Scoring" loading="lazy" data-diagram-file="features_E07-live-scoring-f27-1.svg" width="687" height="1027"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_E07-live-scoring-f27-1.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h4 id="f27-match-completion-shared-with-phase-1">Match completion (shared with Phase 1)</h4>
+<div class="code"><span class="code-lang">text</span><button class="copy" type="button">Copy</button><pre><code class="lang-text">on rack won by w:
+  won[w] += 1
+  if won[w] == needed[w]:
+     l = other(w)
+     pts = won[l] == 0             ? (3,0)
+         : won[l] == needed[l] - 1 ? (2,1)     # hill wins over standard (needed 2, won 1)
+         :                           (2,0)
+     status = COMPLETED</code></pre></div>
+<h3 id="f27-flow"><span class="secnum">20.4.3</span> Flow</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E07-live-scoring-f27-2.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E07-live-scoring-f27-2.svg" alt="Diagram: 20 - Live Scoring" loading="lazy" data-diagram-file="features_E07-live-scoring-f27-2.svg" width="1166" height="765"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_E07-live-scoring-f27-2.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="f27-ui"><span class="secnum">20.4.4</span> UI</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E07-live-scoring-f27-3.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E07-live-scoring-f27-3.svg" alt="Diagram: 20 - Live Scoring" loading="lazy" data-diagram-file="features_E07-live-scoring-f27-3.svg" width="346" height="898"></a><figcaption><span>Buttons are at least 56 px tall for one-handed use at the table. The active player&#39;s card uses the green ok style; a haptic tick confirms each tap.</span><a class="full" href="../assets/diagrams/features_E07-live-scoring-f27-3.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="f27-edge-cases"><span class="secnum">20.4.5</span> Edge cases</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Situation</th>
+<th>Expected</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">EC-27.1</td>
+<td>Rack ends during the first shooter&#39;s turn</td>
+<td>Innings unchanged (<a href="../08-scorekeeping-engine.html">08 §8 #6</a>)</td>
+</tr>
+<tr>
+<td class="nw">EC-27.2</td>
+<td>SL2 vs SL2, the loser wins 1</td>
+<td>Hill → 2/1</td>
+</tr>
+<tr>
+<td class="nw">EC-27.3</td>
+<td>Undo after the match-ending rack</td>
+<td>The match re-opens and its points are cleared</td>
+</tr>
+<tr>
+<td class="nw">EC-27.4</td>
+<td>Event from a player who isn&#39;t active</td>
+<td>Rejected <code>40913</code>; the UI offers &quot;Switch active player&quot;</td>
+</tr>
+<tr>
+<td class="nw">EC-27.5</td>
+<td>The scorer gives up on live scoring</td>
+<td>&quot;Enter final score instead&quot; opens E04-F14 with the games so far prefilled; the event log is closed with <code>MANUAL_RESULT</code></td>
+</tr>
+</tbody></table></div>
+<h3 id="f27-acceptance-criteria"><span class="secnum">20.4.6</span> Acceptance criteria</h3>
+<ul>
+<li><strong>AC-27.1</strong> Given the shared fixture set <code>fixtures/8ball/*.json</code>, when both the TS and Go reducers run, then their final states are byte-identical.</li>
+<li><strong>AC-27.2</strong> Given SL5 vs SL3 with a final of 4–1, then points = 2/1 (the loser needed 2 and won 1).</li>
+<li><strong>AC-27.3</strong> Given an SL4 player with 1 time-out left, when a second time-out is tapped in the same rack, then it&#39;s rejected.</li>
+</ul>
+<h3 id="f27-open-questions"><span class="secnum">20.4.7</span> Open questions</h3>
+<ul>
+<li>Is the time-out count by SL (R-104) correct for this league?</li>
+</ul>
+</section>
+
+<h2 id="f28"><span class="secnum">20.5</span> F28 — Racks &amp; accolades</h2>
+<section class="feature"><div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>Status</th>
+<th>Rules</th>
+<th>Repo refs</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>2</td>
+<td><span class="badge b-target">Target</span></td>
+<td>R-060, R-061, R-062, R-084, R-144 · <a href="../04-domain-rules.html">04 §5.2, §9</a></td>
+<td>—</td>
+</tr>
+</tbody></table></div>
+<h3 id="f28-requirements"><span class="secnum">20.5.1</span> Requirements</h3>
+<p><em>As a scorekeeper, I end a rack with the exact outcome. As a player, my break-and-runs and golden breaks are counted on my profile.</em></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Requirement</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">FR-28.1</td>
+<td><strong>End Rack…</strong> opens a sheet with the six 8-Ball outcomes for the active player: Make 8 Ball, Break and Run, 8 on the Break (wins); Early 8, Scratch on 8, 8 in the Wrong Pocket (losses)</td>
+</tr>
+<tr>
+<td class="nw">FR-28.2</td>
+<td>Break and Run and 8 on the Break are shown <strong>only while</strong> <code>rack.firstTurnLive</code> is true and the shooter is the breaker (R-060)</td>
+</tr>
+<tr>
+<td class="nw">FR-28.3</td>
+<td>A win outcome gives +1 game to the shooter. A loss outcome gives +1 game to the opponent (R-061)</td>
+</tr>
+<tr>
+<td class="nw">FR-28.4</td>
+<td>Accolades are derived <strong>on the server</strong> from events and written to <code>player_accolades</code>: <code>BR</code>, <code>8OB</code>, <code>RACKLESS</code> (won the lag and the match without losing a rack), <code>DOUBLE_STRIKE</code> (BR + golden break on the same league night, once per night)</td>
+</tr>
+<tr>
+<td class="nw">FR-28.5</td>
+<td>A new rack opens with <code>breaker</code> per bylaw, <code>firstTurnLive = true</code>, time-outs reset, and rack DS = 0</td>
+</tr>
+<tr>
+<td class="nw">FR-28.6</td>
+<td>The match breakdown (R-144) lists racks: number, breaker, winner, outcome code, innings</td>
+</tr>
+<tr>
+<td class="nw">FR-28.7</td>
+<td>Undo of a rack end also removes the accolades it created</td>
+</tr>
+</tbody></table></div>
+<h3 id="f28-logic-end-of-rack-decision"><span class="secnum">20.5.2</span> Logic: end-of-rack decision</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E07-live-scoring-f28-1.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E07-live-scoring-f28-1.svg" alt="Diagram: 20 - Live Scoring" loading="lazy" data-diagram-file="features_E07-live-scoring-f28-1.svg" width="808" height="1428"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_E07-live-scoring-f28-1.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="f28-outcomes"><span class="secnum">20.5.3</span> Outcomes</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Code</th>
+<th>Label</th>
+<th>Result for shooter</th>
+<th>Accolade</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>MAKE_8</code></td>
+<td>Make 8 Ball</td>
+<td>Win</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>BREAK_AND_RUN</code></td>
+<td>Break and Run</td>
+<td>Win</td>
+<td><code>BR</code></td>
+</tr>
+<tr>
+<td><code>EIGHT_ON_BREAK</code></td>
+<td>8 on the Break</td>
+<td>Win</td>
+<td><code>8OB</code></td>
+</tr>
+<tr>
+<td><code>EARLY_8</code></td>
+<td>Make 8 Ball Early</td>
+<td>Loss</td>
+<td>— (E8 code kept for stats)</td>
+</tr>
+<tr>
+<td><code>SCRATCH_8</code></td>
+<td>Scratch on 8 Ball</td>
+<td>Loss</td>
+<td>— (S8)</td>
+</tr>
+<tr>
+<td><code>WRONG_POCKET_8</code></td>
+<td>8 Ball Wrong Pocket</td>
+<td>Loss</td>
+<td>— (8WP)</td>
+</tr>
+</tbody></table></div>
+<h3 id="f28-flow"><span class="secnum">20.5.4</span> Flow</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E07-live-scoring-f28-2.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E07-live-scoring-f28-2.svg" alt="Diagram: 20 - Live Scoring" loading="lazy" data-diagram-file="features_E07-live-scoring-f28-2.svg" width="1549" height="663"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_E07-live-scoring-f28-2.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="f28-edge-cases"><span class="secnum">20.5.5</span> Edge cases</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Situation</th>
+<th>Expected</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">EC-28.1</td>
+<td>8 on the break after a turn-over in the same rack</td>
+<td>Not offered; rejected if sent (R-060)</td>
+</tr>
+<tr>
+<td class="nw">EC-28.2</td>
+<td>Early 8 by the breaker on the break</td>
+<td>Loss for the breaker, opponent +1</td>
+</tr>
+<tr>
+<td class="nw">EC-28.3</td>
+<td>Same player gets BR in match 1 and 8OB in a later match the same night</td>
+<td>One <code>DOUBLE_STRIKE</code></td>
+</tr>
+<tr>
+<td class="nw">EC-28.4</td>
+<td>Undo of a BR rack end</td>
+<td>The rack and the BR accolade are both removed</td>
+</tr>
+<tr>
+<td class="nw">EC-28.5</td>
+<td>Match finished by manual entry (fallback)</td>
+<td>No rack-level accolades are inferred</td>
+</tr>
+</tbody></table></div>
+<h3 id="f28-acceptance-criteria"><span class="secnum">20.5.6</span> Acceptance criteria</h3>
+<ul>
+<li><strong>AC-28.1</strong> Given a turn-over in rack 3, when End Rack opens, then Break and Run and 8 on the Break are hidden.</li>
+<li><strong>AC-28.2</strong> Given Nam wins the lag and the match 4–0, then a <code>RACKLESS</code> accolade exists for Nam on that match.</li>
+<li><strong>AC-28.3</strong> Given a Scratch on 8 by Huy, then Nam&#39;s games increase by 1.</li>
+</ul>
+<h3 id="f28-open-questions"><span class="secnum">20.5.7</span> Open questions</h3>
+<ul>
+<li><a href="../14-open-questions.html">Q5</a>: DOUBLE_STRIKE definition (BR + golden break, same night).</li>
+</ul>
+</section>
+
+<h2 id="f29"><span class="secnum">20.6</span> F29 — Offline scoring sync</h2>
+<section class="feature"><div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>Status</th>
+<th>Rules</th>
+<th>Repo refs</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>2</td>
+<td><span class="badge b-target">Target</span></td>
+<td>NFR-04 · <a href="../08-scorekeeping-engine.html">08 §5</a></td>
+<td>new <code>league-fe/src/lib/scoring/{queue,sync}.ts</code></td>
+</tr>
+</tbody></table></div>
+<h3 id="f29-requirements"><span class="secnum">20.6.1</span> Requirements</h3>
+<p><em>As a scorekeeper in a basement pool hall with bad signal, I keep scoring without waiting. Nothing I tap is lost or counted twice when the connection comes back.</em></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Requirement</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">FR-29.1</td>
+<td>Every event gets a client <code>idempotencyKey</code> (UUIDv7) and the <code>expectedSeq</code> the client believed was current</td>
+</tr>
+<tr>
+<td class="nw">FR-29.2</td>
+<td>Events are applied to the local state at once (TS reducer) and written to an IndexedDB queue <strong>before</strong> any network call</td>
+</tr>
+<tr>
+<td class="nw">FR-29.3</td>
+<td>A sync loop sends up to 50 queued events per request, in order. It runs on enqueue, on <code>online</code>, on visibility change, and every 5 s while the queue isn&#39;t empty</td>
+</tr>
+<tr>
+<td class="nw">FR-29.4</td>
+<td>Server: duplicate <code>idempotencyKey</code> → 200 with the original <code>seq</code> (no-op). Events are processed in order in one transaction; the first invalid event stops the batch and is reported</td>
+</tr>
+<tr>
+<td class="nw">FR-29.5</td>
+<td><code>409 stale</code> → the client fetches <code>events?after=&lt;serverSeq&gt;</code>, applies them, re-applies its still-pending events on top (<strong>rebase</strong>), and retries. Pending events that become invalid after the rebase are dropped with a visible notice</td>
+</tr>
+<tr>
+<td class="nw">FR-29.6</td>
+<td>The UI shows sync status: ✓ synced · ↻ syncing n · <span class="badge b-assumption">Assumption</span> offline n pending. Submitting the night (F15) needs an empty queue</td>
+</tr>
+<tr>
+<td class="nw">FR-29.7</td>
+<td>The queue survives reloads and app restarts. It&#39;s keyed by team match and cleared after submit</td>
+</tr>
+<tr>
+<td class="nw">FR-29.8</td>
+<td>The service worker still never caches <code>/api/v1</code> (F20). Offline support lives in app code, not in SW caching</td>
+</tr>
+</tbody></table></div>
+<h3 id="f29-logic-sync-loop"><span class="secnum">20.6.2</span> Logic: sync loop</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E07-live-scoring-f29-1.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E07-live-scoring-f29-1.svg" alt="Diagram: 20 - Live Scoring" loading="lazy" data-diagram-file="features_E07-live-scoring-f29-1.svg" width="1164" height="832"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_E07-live-scoring-f29-1.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="f29-flow-offline-then-reconnect"><span class="secnum">20.6.3</span> Flow: offline then reconnect</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E07-live-scoring-f29-2.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E07-live-scoring-f29-2.svg" alt="Diagram: 20 - Live Scoring" loading="lazy" data-diagram-file="features_E07-live-scoring-f29-2.svg" width="977" height="955"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_E07-live-scoring-f29-2.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="f29-api--data"><span class="secnum">20.6.4</span> API &amp; data</h3>
+<div class="code"><span class="code-lang">json</span><button class="copy" type="button">Copy</button><pre><code class="lang-json">{
+  &quot;error&quot;: { &quot;code&quot;: 40920, &quot;message&quot;: &quot;stale expectedSeq&quot; },
+  &quot;data&quot;: { &quot;serverSeq&quot;: 21 }
+}</code></pre></div>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>IndexedDB store</th>
+<th>Key</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>pending</code></td>
+<td><code>[teamMatchId, idempotencyKey]</code></td>
+<td>event + <code>enqueuedAt</code></td>
+</tr>
+<tr>
+<td><code>snapshot</code></td>
+<td><code>teamMatchId</code></td>
+<td>last server state + <code>seq</code></td>
+</tr>
+</tbody></table></div>
+<h3 id="f29-edge-cases"><span class="secnum">20.6.5</span> Edge cases</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Situation</th>
+<th>Expected</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">EC-29.1</td>
+<td>The same batch is sent twice (timeout, then retry)</td>
+<td>The second is an idempotent no-op (<a href="../08-scorekeeping-engine.html">08 §8 #9</a>)</td>
+</tr>
+<tr>
+<td class="nw">EC-29.2</td>
+<td>Two devices write at the same seq</td>
+<td>The one without the lease is rejected (F30); otherwise, 409 and rebase</td>
+</tr>
+<tr>
+<td class="nw">EC-29.3</td>
+<td>Phone storage full</td>
+<td>Show a blocking error; offer &quot;Enter final score instead&quot;</td>
+</tr>
+<tr>
+<td class="nw">EC-29.4</td>
+<td>App killed mid-sync</td>
+<td>Events not acked stay queued; resent on next open</td>
+</tr>
+<tr>
+<td class="nw">EC-29.5</td>
+<td>Offline for the whole night</td>
+<td>Scoring works; submit waits for sync with a clear &quot;Connect to submit&quot; state</td>
+</tr>
+</tbody></table></div>
+<h3 id="f29-acceptance-criteria"><span class="secnum">20.6.6</span> Acceptance criteria</h3>
+<ul>
+<li><strong>AC-29.1</strong> Given airplane mode for 20 events, when the network returns, then the server holds exactly those 20 events in order.</li>
+<li><strong>AC-29.2</strong> Given a 409, then after rebase the client state equals the server state plus the pending events.</li>
+<li><strong>AC-29.3</strong> Given a non-empty queue, then &quot;Submit night&quot; is disabled with the pending count.</li>
+</ul>
+<h3 id="f29-open-questions"><span class="secnum">20.6.7</span> Open questions</h3>
+<ul>
+<li>Should pending events older than 24 h be discarded? Default: no; ask the user.</li>
+</ul>
+</section>
+
+<h2 id="f30"><span class="secnum">20.7</span> F30 — Scoring lease &amp; live viewers</h2>
+<section class="feature"><div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>Status</th>
+<th>Rules</th>
+<th>Repo refs</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>2</td>
+<td><span class="badge b-target">Target</span></td>
+<td>NFR-11 · <a href="../08-scorekeeping-engine.html">08 §1.5, §5</a></td>
+<td>—</td>
+</tr>
+</tbody></table></div>
+<h3 id="f30-requirements"><span class="secnum">20.7.1</span> Requirements</h3>
+<p><em>As a captain, only one phone scores each match, so there are no double taps from two devices. If that phone dies, I can take over. Teammates and friends watch the score live.</em></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Requirement</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">FR-30.1</td>
+<td>A <strong>lease</strong> per individual match: Redis <code>SET lease:individual:{id} {deviceId, userId} NX EX 60</code>, refreshed by every write and by a heartbeat every 20 s</td>
+</tr>
+<tr>
+<td class="nw">FR-30.2</td>
+<td>Only the lease holder can send rack events. Others get <code>40930 lease held by {name}</code> and see the match read-only</td>
+</tr>
+<tr>
+<td class="nw">FR-30.3</td>
+<td><strong>Take over:</strong> a captain of either team or an admin can take the lease with a confirm dialog. The previous holder is told &quot;Scoring moved to {name}&quot; and becomes read-only. It&#39;s audited (F41)</td>
+</tr>
+<tr>
+<td class="nw">FR-30.4</td>
+<td>A lease expires after 60 s without a heartbeat; the next eligible device acquires it automatically</td>
+</tr>
+<tr>
+<td class="nw">FR-30.5</td>
+<td><strong>Live viewers:</strong> <code>GET /ws/team-matches/{id}</code> (cookie-authenticated; any signed-in user in Phase 2, public later) receives the full state on connect and a new state on each committed event</td>
+</tr>
+<tr>
+<td class="nw">FR-30.6</td>
+<td>Fan-out: API pods <code>SUBSCRIBE match:{teamMatchId}</code> in Redis and push to their local sockets. p95 from commit to viewer &lt; 1 s (NFR-11)</td>
+</tr>
+<tr>
+<td class="nw">FR-30.7</td>
+<td>Fallback: if a WebSocket can&#39;t connect, poll <code>GET /team-matches/{id}/live</code> every 5 s</td>
+</tr>
+<tr>
+<td class="nw">FR-30.8</td>
+<td>Connection limits: 200 viewers per team match, idle timeout 30 min, ping every 25 s</td>
+</tr>
+</tbody></table></div>
+<h3 id="f30-logic-who-may-write"><span class="secnum">20.7.2</span> Logic: who may write</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E07-live-scoring-f30-1.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E07-live-scoring-f30-1.svg" alt="Diagram: 20 - Live Scoring" loading="lazy" data-diagram-file="features_E07-live-scoring-f30-1.svg" width="836" height="925"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_E07-live-scoring-f30-1.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="f30-flow-phone-dies-mid-match"><span class="secnum">20.7.3</span> Flow: phone dies mid-match</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E07-live-scoring-f30-2.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E07-live-scoring-f30-2.svg" alt="Diagram: 20 - Live Scoring" loading="lazy" data-diagram-file="features_E07-live-scoring-f30-2.svg" width="1219" height="950"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_E07-live-scoring-f30-2.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="f30-ui"><span class="secnum">20.7.4</span> UI</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Surface</th>
+<th>Detail</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Live score header</td>
+<td>&quot;Scoring on this phone&quot; chip; on other devices &quot;Scored by {name} · Take over&quot;</td>
+</tr>
+<tr>
+<td>Live view</td>
+<td>Same layout as F27 without action buttons, with a pulse dot when connected and &quot;Reconnecting…&quot; otherwise</td>
+</tr>
+<tr>
+<td>Night page</td>
+<td>Each slot shows &quot;Live&quot; with the current games when a match is in progress</td>
+</tr>
+</tbody></table></div>
+<h3 id="f30-edge-cases"><span class="secnum">20.7.5</span> Edge cases</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Situation</th>
+<th>Expected</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">EC-30.1</td>
+<td>Redis restarts</td>
+<td>Leases vanish; the next write re-acquires. Viewers reconnect and get state from Postgres</td>
+</tr>
+<tr>
+<td class="nw">EC-30.2</td>
+<td>Pod with many sockets is drained</td>
+<td>Clients reconnect to another pod (jittered backoff)</td>
+</tr>
+<tr>
+<td class="nw">EC-30.3</td>
+<td>Two take-overs at once</td>
+<td>The last write wins in Redis; both actions are audited, and the loser sees read-only</td>
+</tr>
+<tr>
+<td class="nw">EC-30.4</td>
+<td>A viewer&#39;s network is slow</td>
+<td>The server drops intermediate states and always sends the latest</td>
+</tr>
+</tbody></table></div>
+<h3 id="f30-acceptance-criteria"><span class="secnum">20.7.6</span> Acceptance criteria</h3>
+<ul>
+<li><strong>AC-30.1</strong> Given phone A holds the lease, when phone B sends an event, then it&#39;s rejected with 40930 and B shows read-only.</li>
+<li><strong>AC-30.2</strong> Given 20 viewers on a match, when an event commits, then all 20 receive it within 1 s at p95 (k6 WS check, F46).</li>
+<li><strong>AC-30.3</strong> Given a take-over, then <code>audit_log</code> has a row with the old holder, the new holder and the time.</li>
+</ul>
+<h3 id="f30-open-questions"><span class="secnum">20.7.7</span> Open questions</h3>
+<ul>
+<li>Should live view be public (no sign-in) for spectators? Default: signed-in users only in Phase 2.</li>
+</ul>
+</section>
+
+</article>
+</main>
+<script src="../assets/site-data.js"></script>
+<script src="../assets/layout.js"></script>
+<script src="../assets/search-index.js"></script>
+<script src="../assets/site.js"></script>
+</body>
+</html>

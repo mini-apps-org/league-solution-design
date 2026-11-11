@@ -1,0 +1,601 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>15 - League Data Foundation · MViP Solution Design</title>
+<link rel="stylesheet" href="../assets/site.css">
+<script src="../assets/boot.js"></script>
+</head>
+<body data-root="../" data-page="features/E02-league-foundation.html">
+<main id="main" class="content">
+<article class="doc">
+<h1>15 - League Data Foundation</h1>
+<p class="lede">Epic E02 · 6 features</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Goal</strong></td>
+<td>The league&#39;s data, rules and API exist in league-be, so every screen has something real to call</td>
+</tr>
+<tr>
+<td><strong>Phase</strong></td>
+<td>1 (F7–F10) · 2 (F38, F43)</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><span class="badge b-missing">Missing</span><strong>P0 blocker.</strong> Specified in league-fe <code>plans/…/plan-1..3</code> as &quot;done&quot;, but missing from league-be (<a href="../15-as-built-vs-target.html">27</a>)</td>
+</tr>
+<tr>
+<td><strong>Actors</strong></td>
+<td>Backend engineers, Admin</td>
+</tr>
+<tr>
+<td><strong>Related</strong></td>
+<td><a href="../06-data-model.html">06 data model</a> · <a href="../07-api-design.html">07 API</a> · <a href="../10-backend-design.html">10 backend</a> · <a href="../04-domain-rules.html">04 rules</a></td>
+</tr>
+</tbody></table></div>
+<h2 id="features-by-phase"><span class="secnum">15.1</span> Features by phase</h2>
+<h3 id="phase-1"><span class="secnum">15.1.1</span> Phase 1</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>Feature</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">F7</td>
+<td><a href="E02-league-foundation.html#f07">Schema restore (<code>team_rosters</code>, CHECKs)</a></td>
+<td><span class="badge b-missing">Missing</span></td>
+</tr>
+<tr>
+<td class="nw">F8</td>
+<td><a href="E02-league-foundation.html#f08">Postgres business rules</a></td>
+<td><span class="badge b-missing">Missing</span></td>
+</tr>
+<tr>
+<td class="nw">F9</td>
+<td><a href="E02-league-foundation.html#f09">Seed + migrate/seed targets</a></td>
+<td><span class="badge b-missing">Missing</span></td>
+</tr>
+<tr>
+<td class="nw">F10</td>
+<td><a href="E02-league-foundation.html#f10">League API</a></td>
+<td><span class="badge b-missing">Missing</span></td>
+</tr>
+</tbody></table></div>
+<h3 id="phase-2"><span class="secnum">15.1.2</span> Phase 2</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>Feature</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">F38</td>
+<td><a href="E02-league-foundation.html#f38">Generated Member ID &amp; Team ID</a></td>
+<td><span class="badge b-target">Target</span></td>
+</tr>
+<tr>
+<td class="nw">F43</td>
+<td><a href="E02-league-foundation.html#f43">Migration tool</a></td>
+<td><span class="badge b-target">Target</span></td>
+</tr>
+</tbody></table></div>
+<h2 id="phase-1-deep-dive"><span class="secnum">15.2</span> Phase 1 deep dive</h2>
+<h3 id="components"><span class="secnum">15.2.1</span> Components</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E02-league-foundation-1.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E02-league-foundation-1.svg" alt="Diagram: 15 - League Data Foundation" loading="lazy" data-diagram-file="features_E02-league-foundation-1.svg" width="1982" height="436"></a><figcaption><span>Only <code>00001_init.sql</code> exists today. Everything red has to be restored or rebuilt, in that order.</span><a class="full" href="../assets/diagrams/features_E02-league-foundation-1.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="restore-order"><span class="secnum">15.2.2</span> Restore order</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E02-league-foundation-2.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E02-league-foundation-2.svg" alt="Diagram: 15 - League Data Foundation" loading="lazy" data-diagram-file="features_E02-league-foundation-2.svg" width="1478" height="109"></a><figcaption><span>Each step is a separate PR. Each must pass its own tests before the next one starts.</span><a class="full" href="../assets/diagrams/features_E02-league-foundation-2.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h2 id="phase-2-deep-dive"><span class="secnum">15.3</span> Phase 2 deep dive</h2>
+<p><strong>Scope:</strong> <a href="E02-league-foundation.html#f38">F38 Generated Member ID &amp; Team ID</a> and <a href="E02-league-foundation.html#f43">F43 Migration tool</a>. Phase 1 trusts IDs typed in by the admin and runs SQL files by hand. Phase 2 has the database allocate IDs and makes schema change a versioned, CI-driven step of every release.</p>
+<h3 id="components-what-phase-2-adds"><span class="secnum">15.3.1</span> Components: what Phase 2 adds</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E02-league-foundation-3.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E02-league-foundation-3.svg" alt="Diagram: 15 - League Data Foundation" loading="lazy" data-diagram-file="features_E02-league-foundation-3.svg" width="1360" height="311"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_E02-league-foundation-3.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="key-flow-a-release-with-a-schema-change"><span class="secnum">15.3.2</span> Key flow: a release with a schema change</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E02-league-foundation-4.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E02-league-foundation-4.svg" alt="Diagram: 15 - League Data Foundation" loading="lazy" data-diagram-file="features_E02-league-foundation-4.svg" width="1114" height="672"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_E02-league-foundation-4.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="data-delta"><span class="secnum">15.3.3</span> Data delta</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Change</th>
+<th>Why</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>id_counters (scope, next_value)</code> + <code>next_member_id()</code> / <code>next_team_id()</code> with <code>SELECT … FOR UPDATE</code></td>
+<td>No duplicate or skipped IDs under concurrency</td>
+</tr>
+<tr>
+<td><code>players.member_id</code> and <code>teams.team_number</code> default to the functions</td>
+<td>The admin UI stops asking for IDs</td>
+</tr>
+<tr>
+<td><code>migrations/</code> renamed to <code>NNNNN_name.sql</code> with <code>-- +goose Up/Down</code></td>
+<td>Ordered, reversible migrations</td>
+</tr>
+<tr>
+<td>Rule: migrations are expand → migrate → contract, never breaking the running version</td>
+<td>Zero-downtime deploys (F22)</td>
+</tr>
+</tbody></table></div>
+
+<h2 id="f07"><span class="secnum">15.4</span> F7 — Schema restore</h2>
+<section class="feature"><div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>Status</th>
+<th>Rules</th>
+<th>Repo refs</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1</td>
+<td><span class="badge b-missing">Missing</span></td>
+<td>R-011, R-036</td>
+<td><code>league-be/db/migrations/00001_init.sql</code> · spec: <code>league-fe/plans/…/plan-1-database-foundation.md</code></td>
+</tr>
+</tbody></table></div>
+<h3 id="f07-requirements"><span class="secnum">15.4.1</span> Requirements</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Requirement</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">FR-7.1</td>
+<td>Create <code>team_rosters (team_id, player_id, left_at NULL, …)</code>. <code>left_at IS NULL</code> means &quot;currently on the roster&quot;</td>
+</tr>
+<tr>
+<td class="nw">FR-7.2</td>
+<td>Partial unique index: a player has <strong>at most one active roster</strong> (<code>WHERE left_at IS NULL</code>). Phase 2 changes this to one per division (<a href="../14-open-questions.html">Q32</a>, F39c)</td>
+</tr>
+<tr>
+<td class="nw">FR-7.3</td>
+<td>Partial index on <code>team_rosters (team_id) WHERE left_at IS NULL</code> for roster reads</td>
+</tr>
+<tr>
+<td class="nw">FR-7.4</td>
+<td>CHECK on <code>team_matches.status IN (&#39;scheduled&#39;,&#39;in_progress&#39;,&#39;submitted&#39;)</code></td>
+</tr>
+<tr>
+<td class="nw">FR-7.5</td>
+<td>CHECK on <code>individual_matches.first_put_up IN (&#39;home&#39;,&#39;away&#39;)</code> (<code>status</code> already has a CHECK)</td>
+</tr>
+<tr>
+<td class="nw">FR-7.6</td>
+<td>Transfers are <strong>close-then-open</strong>: set <code>left_at</code>, insert a new row. Never <code>UPDATE team_id</code></td>
+</tr>
+<tr>
+<td class="nw">FR-7.7</td>
+<td>Keep the TEXT <code>users.id</code> and every TEXT FK into <code>users</code> (matches <code>auth.User.ID string</code>)</td>
+</tr>
+</tbody></table></div>
+<h3 id="f07-data"><span class="secnum">15.4.2</span> Data</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E02-league-foundation-f07-1.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E02-league-foundation-f07-1.svg" alt="Diagram: 15 - League Data Foundation" loading="lazy" data-diagram-file="features_E02-league-foundation-f07-1.svg" width="649" height="514"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_E02-league-foundation-f07-1.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="f07-edge-cases"><span class="secnum">15.4.3</span> Edge cases</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Situation</th>
+<th>Expected</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">EC-7.1</td>
+<td>Inserting a second active roster row for one player</td>
+<td>Unique violation → service returns <code>40001</code> with a clear message</td>
+</tr>
+<tr>
+<td class="nw">EC-7.2</td>
+<td>Player transferred mid-season</td>
+<td>Old row gets <code>left_at</code>; played matches still reference the player via <code>individual_matches</code></td>
+</tr>
+<tr>
+<td class="nw">EC-7.3</td>
+<td>Status typo <code>&#39;Submitted&#39;</code></td>
+<td>Rejected by the CHECK</td>
+</tr>
+</tbody></table></div>
+<h3 id="f07-acceptance-criteria"><span class="secnum">15.4.4</span> Acceptance criteria</h3>
+<ul>
+<li><strong>AC-7.1</strong> <code>psql -v ON_ERROR_STOP=1 -f 00001… -f 00002…</code> succeeds on an empty database.</li>
+<li><strong>AC-7.2</strong> A second active roster for the same player fails.</li>
+</ul>
+</section>
+
+<h2 id="f08"><span class="secnum">15.5</span> F8 — Postgres business rules</h2>
+<section class="feature"><div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>Status</th>
+<th>Rules</th>
+<th>Repo refs</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1</td>
+<td><span class="badge b-missing">Missing</span></td>
+<td>R-034/035/036, R-050, R-120, R-125, §5.3</td>
+<td>spec: <code>plan-2-database-rules-and-seed.md</code> · mirror: <code>league-fe/_parked/src/lib/rules.ts</code></td>
+</tr>
+</tbody></table></div>
+<h3 id="f08-requirements"><span class="secnum">15.5.1</span> Requirements</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Requirement</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">FR-8.1</td>
+<td><code>fn_snapshot_put_up()</code> BEFORE INSERT/UPDATE on <code>individual_matches</code>: when both players are set and <code>home_skill_level IS NULL</code>, copy both <code>players.skill_level</code> values and look up <code>race_chart</code>. Never overwrite</td>
+</tr>
+<tr>
+<td class="nw">FR-8.2</td>
+<td><code>fn_score_individual_match()</code> BEFORE INSERT/UPDATE: derive <code>status</code> and points. Raise if games exceed a race or both players reached their race</td>
+</tr>
+<tr>
+<td class="nw">FR-8.3</td>
+<td><code>fn_roll_up_team_points()</code> AFTER INSERT/UPDATE/DELETE: <code>team_matches.home_points/away_points = Σ</code> of the 5 rows</td>
+</tr>
+<tr>
+<td class="nw">FR-8.4</td>
+<td><code>fn_recompute_player_stats()</code> (trigger <code>trg_40_sync_player_stats</code>): <strong>full recompute</strong> per affected player and division, not a delta</td>
+</tr>
+<tr>
+<td class="nw">FR-8.5</td>
+<td><code>put_up_block_reason(team_match_id, side, player_id)</code> returns <code>would_break_23 | already_put_up | not_on_roster | side_complete</code> or NULL. <code>can_put_up()</code> is <code>reason IS NULL</code></td>
+</tr>
+<tr>
+<td class="nw">FR-8.6</td>
+<td><code>change_skill_level(player_id, new_sl, reason, changed_by)</code> validates, updates <code>players.skill_level</code>, inserts history, and returns the history id</td>
+</tr>
+<tr>
+<td class="nw">FR-8.7</td>
+<td>Views <code>individual_match_sides</code>, <code>player_division_stats</code> (zeros for unplayed players), <code>team_standings</code> (submitted nights only)</td>
+</tr>
+<tr>
+<td class="nw">FR-8.8</td>
+<td>Trigger names are numbered (<code>trg_10_…</code>, <code>trg_20_…</code>, <code>trg_40_…</code>) because Postgres fires same-event triggers in name order</td>
+</tr>
+<tr>
+<td class="nw">FR-8.9</td>
+<td>Functions read <code>divisions.skill_level_cap</code>, never a literal 23</td>
+</tr>
+</tbody></table></div>
+<h3 id="f08-logic-points-fn_score_individual_match"><span class="secnum">15.5.2</span> Logic: points (<code>fn_score_individual_match</code>)</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E02-league-foundation-f08-1.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E02-league-foundation-f08-1.svg" alt="Diagram: 15 - League Data Foundation" loading="lazy" data-diagram-file="features_E02-league-foundation-f08-1.svg" width="669" height="1456"></a><figcaption><span>A match totals 3, 3 or 2 points (<a href="../14-open-questions.html">Q29</a>).</span><a class="full" href="../assets/diagrams/features_E02-league-foundation-f08-1.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="f08-logic-put-up-block-reason"><span class="secnum">15.5.3</span> Logic: put-up block reason</h3>
+<div class="code"><span class="code-lang">text</span><button class="copy" type="button">Copy</button><pre><code class="lang-text">put_up_block_reason(tm, side, player):
+  if player not in active team_rosters of tm.&lt;side&gt;_team        → 'not_on_roster'
+  if player already in any individual_matches of tm (either side) → 'already_put_up'
+  if count(&lt;side&gt;_player_id set in tm) = 5                        → 'side_complete'
+  used := Σ snapshot &lt;side&gt;_skill_level of tm rows  (+ live SL of a put-up not yet snapshotted)
+  if used + player.skill_level &gt; division.skill_level_cap        → 'would_break_23'
+  return NULL</code></pre></div>
+<blockquote>
+<p>Phase 2 refinement (R-035): also block a pick that leaves the remaining slots impossible to fill within the cap. The MVP checks only the sum including this pick.</p>
+</blockquote>
+<h3 id="f08-logic-trigger-chain"><span class="secnum">15.5.4</span> Logic: trigger chain</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E02-league-foundation-f08-2.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E02-league-foundation-f08-2.svg" alt="Diagram: 15 - League Data Foundation" loading="lazy" data-diagram-file="features_E02-league-foundation-f08-2.svg" width="1599" height="819"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_E02-league-foundation-f08-2.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="f08-edge-cases"><span class="secnum">15.5.5</span> Edge cases</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Situation</th>
+<th>Expected</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">EC-8.1</td>
+<td>Admin changes SL 4 → 6 after match 2 was played</td>
+<td>Match 2 keeps SL 4 and race; the next put-up uses 6</td>
+</tr>
+<tr>
+<td class="nw">EC-8.2</td>
+<td>Result corrected from 3–0 to 3–2</td>
+<td>Points recomputed (3/0 → 2/1); roll-up and stats recomputed</td>
+</tr>
+<tr>
+<td class="nw">EC-8.3</td>
+<td>Row deleted by an admin</td>
+<td>Roll-up and stats recompute (the AFTER DELETE path)</td>
+</tr>
+<tr>
+<td class="nw">EC-8.4</td>
+<td><code>change_skill_level</code> with SL 9, a blank reason, or the same SL</td>
+<td>Raises; nothing changes</td>
+</tr>
+<tr>
+<td class="nw">EC-8.5</td>
+<td>Loser race 2, loser won 1</td>
+<td>Hill → 2/1</td>
+</tr>
+</tbody></table></div>
+<h3 id="f08-acceptance-criteria"><span class="secnum">15.5.6</span> Acceptance criteria</h3>
+<ul>
+<li><strong>AC-8.1</strong> 3–0, winner race 3 → <code>3/0 complete</code>. 4–3, both race 4 → <code>2/1</code>. 4–1, loser race 3 → <code>2/0</code>. 5–2, both race 5 → <code>2/0</code>.</li>
+<li><strong>AC-8.2</strong> With 20 SL used and cap 23: SL 6 → <code>would_break_23</code>; SL 3 → NULL.</li>
+<li><strong>AC-8.3</strong> <code>team_standings</code> lists all teams at 0 until a night is <code>submitted</code>.</li>
+</ul>
+</section>
+
+<h2 id="f09"><span class="secnum">15.6</span> F9 — Seed and migrate/seed targets</h2>
+<section class="feature"><div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>Status</th>
+<th>Repo refs</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1</td>
+<td><span class="badge b-missing">Missing</span> the seed is broken</td>
+<td><code>league-be/db/migrations/seeds/20261106_seed.sql</code>, <code>Makefile</code></td>
+</tr>
+</tbody></table></div>
+<h3 id="f09-requirements"><span class="secnum">15.6.1</span> Requirements</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Requirement</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">FR-9.1</td>
+<td><code>make migrate</code> applies <code>db/migrations/0000*_*.sql</code> in order with <code>psql -v ON_ERROR_STOP=1</code> against <code>DATABASE_URL</code></td>
+</tr>
+<tr>
+<td class="nw">FR-9.2</td>
+<td><code>make seed</code> applies the seed file. It&#39;s idempotent (<code>ON CONFLICT DO NOTHING</code>)</td>
+</tr>
+<tr>
+<td class="nw">FR-9.3</td>
+<td>The seed makes the 23 cap bind: 03209&#39;s top five = 29, 03211&#39;s = 27, and 03207 = 22 as the control</td>
+</tr>
+<tr>
+<td class="nw">FR-9.4</td>
+<td>Dev identities: <code>admin@example.test</code> (ADMIN) and <code>captain@example.test</code> (CAPTAIN, member 95007620). They can&#39;t log in; they exist only for role tests</td>
+</tr>
+<tr>
+<td class="nw">FR-9.5</td>
+<td>Two unpaid players exist, to exercise <code>40003</code></td>
+</tr>
+<tr>
+<td class="nw">FR-9.6</td>
+<td>Week-10 fixtures on 2026-11-10 19:30 +07: 03209 v 03214 and 03211 v 03207</td>
+</tr>
+</tbody></table></div>
+<h3 id="f09-acceptance-criteria"><span class="secnum">15.6.2</span> Acceptance criteria</h3>
+<ul>
+<li><strong>AC-9.1</strong> On a fresh DB, <code>make migrate &amp;&amp; make seed</code> succeeds, and running <code>make seed</code> twice changes nothing.</li>
+</ul>
+</section>
+
+<h2 id="f10"><span class="secnum">15.7</span> F10 — League API</h2>
+<section class="feature"><div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>Status</th>
+<th>Repo refs</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1</td>
+<td><span class="badge b-missing">Missing</span></td>
+<td>spec: <code>plan-3-league-api-endpoints.md</code> · client: <code>league-fe/src/api/leagueAPI.ts</code>, <code>src/types/league.ts</code></td>
+</tr>
+</tbody></table></div>
+<h3 id="f10-requirements"><span class="secnum">15.7.1</span> Requirements</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Requirement</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">FR-10.1</td>
+<td>Implement the routes in <a href="../07-api-design.html">07 §2</a> under <code>internal/league</code> with the repo layering (handlers → services → repositories)</td>
+</tr>
+<tr>
+<td class="nw">FR-10.2</td>
+<td>Responses use <code>{session_id, count, data, metadata}</code>. Lists set <code>count</code>. Bodies are camelCase; query params are snake_case</td>
+</tr>
+<tr>
+<td class="nw">FR-10.3</td>
+<td>Writes re-check rules server-side (<code>can_put_up</code>) even if the UI already blocked the action</td>
+</tr>
+<tr>
+<td class="nw">FR-10.4</td>
+<td>New error codes <code>40003 UNPAID_MEMBER</code>, <code>40004 PUT_UP_REJECTED</code>, <code>40005–40007</code> (member link). Never renumber</td>
+</tr>
+<tr>
+<td class="nw">FR-10.5</td>
+<td><code>make swagger</code> regenerates <code>docs/swagger</code>, and the FE types are generated from it (F24)</td>
+</tr>
+<tr>
+<td class="nw">FR-10.6</td>
+<td>An integration test runs every query against a seeded DB (<code>LEAGUE_TEST_DATABASE_URL</code>)</td>
+</tr>
+</tbody></table></div>
+<h3 id="f10-endpoint-map"><span class="secnum">15.7.2</span> Endpoint map</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E02-league-foundation-f10-1.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E02-league-foundation-f10-1.svg" alt="Diagram: 15 - League Data Foundation" loading="lazy" data-diagram-file="features_E02-league-foundation-f10-1.svg" width="1729" height="557"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_E02-league-foundation-f10-1.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="f10-edge-cases"><span class="secnum">15.7.3</span> Edge cases</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Situation</th>
+<th>Expected</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">EC-10.1</td>
+<td>Request body has an unknown field (e.g. snake_case <code>match_order</code>)</td>
+<td>400 <code>40001</code> (<code>DecodeJSON</code> rejects unknown fields)</td>
+</tr>
+<tr>
+<td class="nw">EC-10.2</td>
+<td><code>LIKE</code> search for <code>100%</code></td>
+<td>Matched literally (input escaped)</td>
+</tr>
+<tr>
+<td class="nw">EC-10.3</td>
+<td>Two captains put up at the same time</td>
+<td>One succeeds; the other gets <code>40004</code>, and the FE refreshes the list</td>
+</tr>
+</tbody></table></div>
+<h3 id="f10-acceptance-criteria"><span class="secnum">15.7.4</span> Acceptance criteria</h3>
+<ul>
+<li><strong>AC-10.1</strong> Swagger lists 18 paths.</li>
+<li><strong>AC-10.2</strong> The integration test passes all plan-3 assertions.</li>
+</ul>
+</section>
+
+<h2 id="f38"><span class="secnum">15.8</span> F38 — Generated Member ID and Team ID</h2>
+<section class="feature"><div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>Status</th>
+<th>Rules</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>2</td>
+<td><span class="badge b-target">Target</span></td>
+<td><a href="../04-domain-rules.html">04 §11</a>, <a href="../14-open-questions.html">Q2/Q3/Q33</a></td>
+</tr>
+</tbody></table></div>
+<h3 id="f38-requirements"><span class="secnum">15.8.1</span> Requirements</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Requirement</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">FR-38.1</td>
+<td>On player creation, generate <code>member_id = YYMM + 4-digit sequence for that month</code> (e.g. <code>26110042</code>). Admins can no longer type IDs</td>
+</tr>
+<tr>
+<td class="nw">FR-38.2</td>
+<td>On team creation, generate <code>team_number = RR (region) + VV (venue code) + T (0–9)</code> <strong>only if</strong> the business confirms region + venue numbering. Otherwise keep the APA-style admin input</td>
+</tr>
+<tr>
+<td class="nw">FR-38.3</td>
+<td>A venue code holds up to 10 teams. When full, a new venue code is allocated</td>
+</tr>
+<tr>
+<td class="nw">FR-38.4</td>
+<td>Sequences are gap-free and safe under concurrency: <code>id_sequences(scope, last_value)</code> updated with <code>UPDATE … RETURNING</code> in the same transaction</td>
+</tr>
+<tr>
+<td class="nw">FR-38.5</td>
+<td>Existing IDs are never changed</td>
+</tr>
+</tbody></table></div>
+<h3 id="f38-logic"><span class="secnum">15.8.2</span> Logic</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E02-league-foundation-f38-1.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E02-league-foundation-f38-1.svg" alt="Diagram: 15 - League Data Foundation" loading="lazy" data-diagram-file="features_E02-league-foundation-f38-1.svg" width="1268" height="509"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_E02-league-foundation-f38-1.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="f38-edge-cases"><span class="secnum">15.8.3</span> Edge cases</h3>
+<ul>
+<li><strong>EC-38.1</strong> The 10,000th registration in one month fails clearly (capacity 9,999).</li>
+<li><strong>EC-38.2</strong> A rolled-back transaction leaves no gap, because the sequence row is updated in the same transaction.</li>
+</ul>
+</section>
+
+<h2 id="f43"><span class="secnum">15.9</span> F43 — Migration tool</h2>
+<section class="feature"><div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>2</td>
+<td><span class="badge b-target">Target</span></td>
+</tr>
+</tbody></table></div>
+<h3 id="f43-requirements"><span class="secnum">15.9.1</span> Requirements</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Requirement</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">FR-43.1</td>
+<td>Adopt <code>golang-migrate</code> or <code>goose</code>. Rename the files to the tool&#39;s convention and record the current version in <code>schema_migrations</code></td>
+</tr>
+<tr>
+<td class="nw">FR-43.2</td>
+<td>Every migration has a down script, or is marked irreversible with the reason</td>
+</tr>
+<tr>
+<td class="nw">FR-43.3</td>
+<td>Migrations run as a Kubernetes Job before the rollout (F22). The deploy fails if a migration fails</td>
+</tr>
+<tr>
+<td class="nw">FR-43.4</td>
+<td>Expand/contract: a release contains only backward-compatible changes; destructive changes ship one release later</td>
+</tr>
+<tr>
+<td class="nw">FR-43.5</td>
+<td>CI applies all migrations to an empty Postgres and runs the rule tests (F8)</td>
+</tr>
+</tbody></table></div>
+<h3 id="f43-flow"><span class="secnum">15.9.2</span> Flow</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E02-league-foundation-f43-1.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E02-league-foundation-f43-1.svg" alt="Diagram: 15 - League Data Foundation" loading="lazy" data-diagram-file="features_E02-league-foundation-f43-1.svg" width="771" height="210"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_E02-league-foundation-f43-1.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+</section>
+
+</article>
+</main>
+<script src="../assets/site-data.js"></script>
+<script src="../assets/layout.js"></script>
+<script src="../assets/search-index.js"></script>
+<script src="../assets/site.js"></script>
+</body>
+</html>

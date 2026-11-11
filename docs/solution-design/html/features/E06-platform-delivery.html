@@ -1,0 +1,1554 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>19 - Platform &amp; Delivery · MViP Solution Design</title>
+<link rel="stylesheet" href="../assets/site.css">
+<script src="../assets/boot.js"></script>
+</head>
+<body data-root="../" data-page="features/E06-platform-delivery.html">
+<main id="main" class="content">
+<article class="doc">
+<h1>19 - Platform &amp; Delivery</h1>
+<p class="lede">Epic E06 · 10 features</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Goal</strong></td>
+<td>The app installs like a native app, works in English and Vietnamese, ships safely on a tag, and is observable and tested end to end</td>
+</tr>
+<tr>
+<td><strong>Phase</strong></td>
+<td>1 (F20–F25) · 2 (F42, F44, F45, F46)</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><span class="badge b-built">Built</span> PWA, theme, i18n, both CI pipelines, Vercel deploy, image push · <span class="badge b-notstarted">Not started</span> GKE runtime, staging, generated types, rate limits, logs, worker, monitoring, E2E, load tests</td>
+</tr>
+<tr>
+<td><strong>Actors</strong></td>
+<td>Engineer, DevOps, every end user (indirectly)</td>
+</tr>
+<tr>
+<td><strong>Related</strong></td>
+<td><a href="../12-infra-devops.html">12 infra &amp; DevOps</a> · <a href="../13-nfr-and-testing.html">13 NFR &amp; testing</a> · <a href="../09-frontend-design.html">09 frontend</a> · <a href="../11-security-and-roles.html">11 security</a></td>
+</tr>
+</tbody></table></div>
+<h2 id="features-by-phase"><span class="secnum">19.1</span> Features by phase</h2>
+<h3 id="phase-1-ship-the-mvp-safely"><span class="secnum">19.1.1</span> Phase 1: ship the MVP safely</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>Feature</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">F20</td>
+<td><a href="E06-platform-delivery.html#f20">PWA, theme, i18n, error copy</a></td>
+<td><span class="badge b-built">Built</span></td>
+</tr>
+<tr>
+<td class="nw">F21</td>
+<td><a href="E06-platform-delivery.html#f21">CI/CD</a></td>
+<td><span class="badge b-built">Built</span></td>
+</tr>
+<tr>
+<td class="nw">F22</td>
+<td><a href="E06-platform-delivery.html#f22">GKE deployment</a></td>
+<td><span class="badge b-notstarted">Not started</span></td>
+</tr>
+<tr>
+<td class="nw">F23</td>
+<td><a href="E06-platform-delivery.html#f23">Staging + Google consent screen</a></td>
+<td><span class="badge b-notstarted">Not started</span></td>
+</tr>
+<tr>
+<td class="nw">F24</td>
+<td><a href="E06-platform-delivery.html#f24">Generated API types + FE/BE integration test</a></td>
+<td><span class="badge b-notstarted">Not started</span></td>
+</tr>
+<tr>
+<td class="nw">F25</td>
+<td><a href="E06-platform-delivery.html#f25">Rate limiting, structured logs, vi default</a></td>
+<td><span class="badge b-notstarted">Not started</span></td>
+</tr>
+</tbody></table></div>
+<h3 id="phase-2-run-it-at-league-scale"><span class="secnum">19.1.2</span> Phase 2: run it at league scale</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>Feature</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">F42</td>
+<td><a href="E06-platform-delivery.html#f42">Worker, outbox, Redis</a></td>
+<td><span class="badge b-target">Target</span></td>
+</tr>
+<tr>
+<td class="nw">F44</td>
+<td><a href="E06-platform-delivery.html#f44">Monitoring &amp; error tracking</a></td>
+<td><span class="badge b-target">Target</span></td>
+</tr>
+<tr>
+<td class="nw">F45</td>
+<td><a href="E06-platform-delivery.html#f45">Playwright E2E</a></td>
+<td><span class="badge b-target">Target</span></td>
+</tr>
+<tr>
+<td class="nw">F46</td>
+<td><a href="E06-platform-delivery.html#f46">Load testing</a></td>
+<td><span class="badge b-target">Target</span></td>
+</tr>
+</tbody></table></div>
+<h2 id="phase-1-deep-dive"><span class="secnum">19.2</span> Phase 1 deep dive</h2>
+<p>Phase 1 puts the two repos into production on GCP + Vercel behind Cloudflare. The front end ships today. The backend builds an image but has <strong>no runtime yet</strong> (F22), which blocks go-live together with E02.</p>
+<h3 id="components"><span class="secnum">19.2.1</span> Components</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E06-platform-delivery-1.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E06-platform-delivery-1.svg" alt="Diagram: 19 - Platform &amp; Delivery" loading="lazy" data-diagram-file="features_E06-platform-delivery-1.svg" width="1627" height="538"></a><figcaption><span>Green arrows exist today. Red boxes are the backend runtime still to build in F22. Cloudflare fronts both hosts.</span><a class="full" href="../assets/diagrams/features_E06-platform-delivery-1.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="release-sequence"><span class="secnum">19.2.2</span> Release sequence</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E06-platform-delivery-2.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E06-platform-delivery-2.svg" alt="Diagram: 19 - Platform &amp; Delivery" loading="lazy" data-diagram-file="features_E06-platform-delivery-2.svg" width="1259" height="734"></a><figcaption><span>Backend first, then front end: the FE never ships against an API that lacks its endpoints.</span><a class="full" href="../assets/diagrams/features_E06-platform-delivery-2.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="environments"><span class="secnum">19.2.3</span> Environments</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th></th>
+<th>Local</th>
+<th>Staging (F23)</th>
+<th>Production</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>FE host</td>
+<td><code>localhost:5173</code></td>
+<td><code>staging.mvip-league.com</code></td>
+<td><code>www.mvip-league.com</code></td>
+</tr>
+<tr>
+<td>BE host</td>
+<td><code>localhost:9200</code></td>
+<td><code>be-staging.mvip-league.com</code></td>
+<td><code>be.mvip-league.com</code></td>
+</tr>
+<tr>
+<td><code>APP_ENV</code></td>
+<td><code>development</code></td>
+<td><code>staging</code></td>
+<td><code>production</code></td>
+</tr>
+<tr>
+<td>Cookies</td>
+<td>no prefix, not Secure</td>
+<td>Secure, no prefix</td>
+<td><code>__Host-sid</code>, <code>__Secure-csrf</code></td>
+</tr>
+<tr>
+<td>Google OAuth client</td>
+<td>dev client</td>
+<td>staging client</td>
+<td>prod client</td>
+</tr>
+<tr>
+<td>Database</td>
+<td>docker-compose Postgres</td>
+<td>Cloud SQL <code>league-staging</code></td>
+<td>Cloud SQL <code>league-prod</code></td>
+</tr>
+<tr>
+<td>Deploy trigger</td>
+<td>—</td>
+<td>merge to <code>master</code></td>
+<td>tag <code>x.y.z</code></td>
+</tr>
+</tbody></table></div>
+<h2 id="phase-2-deep-dive"><span class="secnum">19.3</span> Phase 2 deep dive</h2>
+<p>Phase 2 adds asynchronous work (notifications, fees, SL suggestions, live scoring), so it needs a <strong>worker</strong>, an <strong>outbox</strong>, <strong>Redis</strong>, and the tooling to prove the system holds up on a league night.</p>
+<h3 id="components-1"><span class="secnum">19.3.1</span> Components</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E06-platform-delivery-3.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E06-platform-delivery-3.svg" alt="Diagram: 19 - Platform &amp; Delivery" loading="lazy" data-diagram-file="features_E06-platform-delivery-3.svg" width="1220" height="746"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_E06-platform-delivery-3.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="event-path-end-to-end"><span class="secnum">19.3.2</span> Event path, end to end</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E06-platform-delivery-4.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E06-platform-delivery-4.svg" alt="Diagram: 19 - Platform &amp; Delivery" loading="lazy" data-diagram-file="features_E06-platform-delivery-4.svg" width="2005" height="509"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_E06-platform-delivery-4.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="service-level-targets"><span class="secnum">19.3.3</span> Service-level targets</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Target</th>
+<th>Phase 1</th>
+<th>Phase 2</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>API p95 latency</td>
+<td>&lt; 300 ms (NFR-01)</td>
+<td>&lt; 300 ms, and live-score fan-out &lt; 1 s (NFR-11)</td>
+</tr>
+<tr>
+<td>Availability on league nights</td>
+<td>99.5 %</td>
+<td>99.9 %</td>
+</tr>
+<tr>
+<td>Error rate</td>
+<td>&lt; 1 %</td>
+<td>&lt; 0.1 %</td>
+</tr>
+<tr>
+<td>Outbox lag</td>
+<td>—</td>
+<td>&lt; 60 s</td>
+</tr>
+<tr>
+<td>Recovery point (RPO)</td>
+<td>24 h backup</td>
+<td>5 min PITR</td>
+</tr>
+</tbody></table></div>
+
+<h2 id="f20"><span class="secnum">19.4</span> F20 — PWA, theme, i18n, error copy</h2>
+<section class="feature"><div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>Status</th>
+<th>Rules</th>
+<th>Repo refs</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1</td>
+<td><span class="badge b-built">Built</span></td>
+<td>NFR-03, NFR-05, NFR-06</td>
+<td><code>league-fe/public/{manifest.webmanifest,sw.js}</code> · <code>src/lib/register-sw.ts</code> · <code>src/index.css</code> · <code>src/components/ThemeToggle.tsx</code> · <code>src/i18n/{index.ts,en.json,vi.json}</code> · <code>src/lib/errors.ts</code></td>
+</tr>
+</tbody></table></div>
+<h3 id="f20-requirements"><span class="secnum">19.4.1</span> Requirements</h3>
+<p><em>As a captain at a pool hall, I add the app to my home screen, read it in my language, in light or dark, and every error tells me what to do.</em></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Requirement</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">FR-20.1</td>
+<td>Installable PWA named &quot;Billiard League&quot; (short name &quot;Bida&quot;): <code>display: standalone</code>, <code>orientation: portrait</code>, <code>theme_color #1F6FEB</code>, icons 192, 512 and maskable 512</td>
+</tr>
+<tr>
+<td class="nw">FR-20.2</td>
+<td>The service worker registers <strong>only in production builds</strong>. It caches <code>/assets/*</code> (hashed), icons and the manifest. It <strong>never caches HTML or <code>/api/v1/*</code></strong>, so a signed-in page can&#39;t be replayed on a shared phone</td>
+</tr>
+<tr>
+<td class="nw">FR-20.3</td>
+<td>Cache name <code>bida-static-v&lt;n&gt;</code>. On <code>activate</code>, delete every other <code>bida-static-*</code> cache</td>
+</tr>
+<tr>
+<td class="nw">FR-20.4</td>
+<td>The theme toggle cycles <code>system → light → dark</code>. An explicit choice is saved in <code>localStorage.theme</code>, and <code>system</code> follows <code>prefers-color-scheme</code> live</td>
+</tr>
+<tr>
+<td class="nw">FR-20.5</td>
+<td>A pre-paint inline script sets <code>data-theme</code> before React mounts (no flash of the wrong theme)</td>
+</tr>
+<tr>
+<td class="nw">FR-20.6</td>
+<td>Design tokens on <code>:root</code> (15 colours, radius, spacing). Disabled = chip fill + muted text, never opacity. Tap targets ≥ 44 px. Focus ring 2 px accent. Motion 150/200 ms, 0 under <code>prefers-reduced-motion</code></td>
+</tr>
+<tr>
+<td class="nw">FR-20.7</td>
+<td>i18n <code>en</code> + <code>vi</code>: every user-visible string, including <code>aria-label</code>, <code>placeholder</code> and <code>alt</code>, comes from a key. Typecheck fails on key drift between the two files</td>
+</tr>
+<tr>
+<td class="nw">FR-20.8</td>
+<td>Errors display <code>t(&#39;apiError.&lt;code&gt;&#39;)</code> only, never the backend <code>message</code>. An unknown code falls back to <code>apiError.50001</code></td>
+</tr>
+</tbody></table></div>
+<h3 id="f20-logic"><span class="secnum">19.4.2</span> Logic</h3>
+<h4 id="f20-service-worker-fetch-decision">Service-worker fetch decision</h4>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E06-platform-delivery-f20-1.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E06-platform-delivery-f20-1.svg" alt="Diagram: 19 - Platform &amp; Delivery" loading="lazy" data-diagram-file="features_E06-platform-delivery-f20-1.svg" width="651" height="843"></a><figcaption><span>Red is the security rule. Hashed assets are immutable, so cache-first is safe for them only.</span><a class="full" href="../assets/diagrams/features_E06-platform-delivery-f20-1.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h4 id="f20-theme-resolution">Theme resolution</h4>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E06-platform-delivery-f20-2.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E06-platform-delivery-f20-2.svg" alt="Diagram: 19 - Platform &amp; Delivery" loading="lazy" data-diagram-file="features_E06-platform-delivery-f20-2.svg" width="1081" height="363"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_E06-platform-delivery-f20-2.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h4 id="f20-error-copy-resolution">Error copy resolution</h4>
+<div class="code"><span class="code-lang">text</span><button class="copy" type="button">Copy</button><pre><code class="lang-text">messageFor(error):
+  code = error.response?.data?.error?.code      // 5-digit, e.g. 40004
+  if !code and network error  → t('apiError.network')
+  if i18n.exists('apiError.' + code) → t('apiError.' + code)
+  else → t('apiError.50001')</code></pre></div>
+<h3 id="f20-flow-install-and-first-load"><span class="secnum">19.4.3</span> Flow: install and first load</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E06-platform-delivery-f20-3.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E06-platform-delivery-f20-3.svg" alt="Diagram: 19 - Platform &amp; Delivery" loading="lazy" data-diagram-file="features_E06-platform-delivery-f20-3.svg" width="938" height="613"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_E06-platform-delivery-f20-3.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="f20-ui"><span class="secnum">19.4.4</span> UI</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Surface</th>
+<th>Detail</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Header menu</td>
+<td>Theme toggle (<code>aria-label</code> = <code>theme.toggle</code>, announces the next mode); language switcher (F25)</td>
+</tr>
+<tr>
+<td>Install hint</td>
+<td>None in Phase 1. Rely on the browser&#39;s own prompt</td>
+</tr>
+<tr>
+<td>Error banner</td>
+<td><code>ErrorBanner</code> with <code>role=&quot;alert&quot;</code>, the copy from <code>messageFor</code>, and a Retry button when the query can retry</td>
+</tr>
+<tr>
+<td>Toasts</td>
+<td>Write errors use <code>sonner</code> toasts with the same copy</td>
+</tr>
+</tbody></table></div>
+<h3 id="f20-api--data"><span class="secnum">19.4.5</span> API &amp; data</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Error envelope</td>
+<td><code>{&quot;error&quot;: {&quot;code&quot;: 40004, &quot;message&quot;: &quot;&lt;internal&gt;&quot;}}</code> · only <code>code</code> is used</td>
+</tr>
+<tr>
+<td>Key count</td>
+<td>140 keys per locale today, parity enforced by <code>src/i18n/index.ts</code> types</td>
+</tr>
+<tr>
+<td>Storage</td>
+<td><code>localStorage.theme</code>, <code>localStorage.locale</code> (F25), wrapped in try/catch</td>
+</tr>
+</tbody></table></div>
+<h3 id="f20-edge-cases"><span class="secnum">19.4.6</span> Edge cases</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Situation</th>
+<th>Expected</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">EC-20.1</td>
+<td>New release deployed while the app is open</td>
+<td>New hashed assets miss the cache and load fresh. The old cache is removed on the next activate</td>
+</tr>
+<tr>
+<td class="nw">EC-20.2</td>
+<td>Logout on a shared device, then Back</td>
+<td>The HTML and API calls are network-only, so the session-less API returns 401 and the app redirects to <code>/login</code></td>
+</tr>
+<tr>
+<td class="nw">EC-20.3</td>
+<td>Private browsing (storage throws)</td>
+<td>The theme falls back to <code>system</code> and nothing crashes</td>
+</tr>
+<tr>
+<td class="nw">EC-20.4</td>
+<td>The backend adds a new error code before the FE ships its copy</td>
+<td>The generic <code>50001</code> copy shows; no raw backend text</td>
+</tr>
+<tr>
+<td class="nw">EC-20.5</td>
+<td>iOS Safari standalone</td>
+<td><code>apple-touch-icon</code> and the status-bar meta are present; safe-area insets pad the sticky action bar</td>
+</tr>
+</tbody></table></div>
+<h3 id="f20-acceptance-criteria"><span class="secnum">19.4.7</span> Acceptance criteria</h3>
+<ul>
+<li><strong>AC-20.1</strong> Given a production build, when Lighthouse runs, then the PWA is installable and axe reports 0 critical issues on every screen.</li>
+<li><strong>AC-20.2</strong> Given a signed-in user who logs out, when another person opens the app offline, then no previous page or data is shown.</li>
+<li><strong>AC-20.3</strong> Given <code>vi.json</code> misses a key that <code>en.json</code> has, when <code>pnpm typecheck</code> runs, then it fails.</li>
+<li><strong>AC-20.4</strong> Given an API error <code>40004</code>, when it&#39;s displayed, then the text equals <code>t(&#39;apiError.40004&#39;)</code> in the current locale.</li>
+</ul>
+<h3 id="f20-implementation-gaps"><span class="secnum">19.4.8</span> Implementation gaps</h3>
+<ul>
+<li>No language switcher yet; the default is still <code>en</code> (both in F25).</li>
+<li>Lighthouse, axe and real-device QA (iOS Safari; Android with the keyboard over the steppers) haven&#39;t been run (plan-9).</li>
+<li>Error copy for codes added by the missing league API (<code>40004</code>, <code>40901</code>, <code>40902</code>) must be added with E02.</li>
+</ul>
+<h3 id="f20-open-questions"><span class="secnum">19.4.9</span> Open questions</h3>
+<ul>
+<li>Should the app show its own &quot;Install&quot; hint after the second visit? (Default: no.)</li>
+</ul>
+</section>
+
+<h2 id="f21"><span class="secnum">19.5</span> F21 — CI/CD</h2>
+<section class="feature"><div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>Status</th>
+<th>Rules</th>
+<th>Repo refs</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1</td>
+<td><span class="badge b-built">Built</span></td>
+<td class="nw">ADR-010</td>
+<td><code>league-fe/.github/workflows/{ci,cd}.yaml</code>, <code>vercel.json</code> · <code>league-be/.github/workflows/{ci,release}.yaml</code>, <code>Dockerfile</code>, <code>Makefile</code></td>
+</tr>
+</tbody></table></div>
+<h3 id="f21-requirements"><span class="secnum">19.5.1</span> Requirements</h3>
+<p><em>As an engineer, I open a PR and get a clear pass or fail. I push a tag and the release goes out without anyone holding a cloud key.</em></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Requirement</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">FR-21.1</td>
+<td><strong>FE CI</strong> on every PR and push to <code>master</code>: <code>pnpm install --frozen-lockfile</code>, <code>format:check</code>, <code>lint --max-warnings 0</code>, <code>typecheck</code>, <code>test</code>, <code>build</code> (with a dummy <code>VITE_API_URL</code>)</td>
+</tr>
+<tr>
+<td class="nw">FR-21.2</td>
+<td><strong>FE CD</strong> on a <code>*.*.*</code> tag: re-run CI → <code>guard</code> (the tag commit is an ancestor of <code>origin/master</code>) → <code>vercel pull</code> + <code>vercel build --prod</code> → fail if the bundle contains <code>localhost</code> → <code>vercel deploy --prebuilt --prod</code></td>
+</tr>
+<tr>
+<td class="nw">FR-21.3</td>
+<td><strong>BE CI</strong> on PRs and pushes: <code>golangci-lint</code>, <code>gofmt -l</code> empty, <code>go vet</code>, <code>go test -race ./...</code>, <code>go build ./...</code></td>
+</tr>
+<tr>
+<td class="nw">FR-21.4</td>
+<td><strong>BE release</strong> on a <code>*.*.*</code> tag: tests → Workload Identity Federation → <code>docker buildx --platform linux/amd64</code> → push <code>asia-southeast1-docker.pkg.dev/vincent-mini-apps-project/&lt;repo&gt;/league-service:&lt;tag&gt;</code> and <code>:latest</code></td>
+</tr>
+<tr>
+<td class="nw">FR-21.5</td>
+<td>No long-lived keys. GCP via WIF only. The Vercel token, org ID and project ID live in the GitHub <code>production</code> environment, which needs approval</td>
+</tr>
+<tr>
+<td class="nw">FR-21.6</td>
+<td>Workflows pin third-party actions to a commit SHA</td>
+</tr>
+<tr>
+<td class="nw">FR-21.7</td>
+<td>Concurrency: one release per repo at a time (<code>concurrency: release-${{ github.repository }}</code>)</td>
+</tr>
+</tbody></table></div>
+<h3 id="f21-logic-fe-release-gate"><span class="secnum">19.5.2</span> Logic: FE release gate</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E06-platform-delivery-f21-1.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E06-platform-delivery-f21-1.svg" alt="Diagram: 19 - Platform &amp; Delivery" loading="lazy" data-diagram-file="features_E06-platform-delivery-f21-1.svg" width="673" height="913"></a><figcaption><span>Each red stop leaves production untouched. Prebuilt deploys mean Vercel ships exactly what CI built.</span><a class="full" href="../assets/diagrams/features_E06-platform-delivery-f21-1.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="f21-flow-backend-image-release"><span class="secnum">19.5.3</span> Flow: backend image release</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E06-platform-delivery-f21-2.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E06-platform-delivery-f21-2.svg" alt="Diagram: 19 - Platform &amp; Delivery" loading="lazy" data-diagram-file="features_E06-platform-delivery-f21-2.svg" width="1025" height="539"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_E06-platform-delivery-f21-2.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="f21-pipelines-at-a-glance"><span class="secnum">19.5.4</span> Pipelines at a glance</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Repo</th>
+<th>Trigger</th>
+<th>Jobs</th>
+<th>Output</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>league-fe</td>
+<td>PR, push <code>master</code></td>
+<td>format · lint · typecheck · test · build</td>
+<td>status check</td>
+</tr>
+<tr>
+<td>league-fe</td>
+<td>tag <code>*.*.*</code></td>
+<td>ci → guard → build → bundle check → deploy</td>
+<td>Vercel production</td>
+</tr>
+<tr>
+<td>league-be</td>
+<td>PR, push</td>
+<td>lint · fmt · vet · test -race · build</td>
+<td>status check</td>
+</tr>
+<tr>
+<td>league-be</td>
+<td>tag <code>*.*.*</code></td>
+<td>test → auth → build → push</td>
+<td>image in Artifact Registry</td>
+</tr>
+<tr>
+<td>league-be</td>
+<td>tag <code>*.*.*</code> (F22)</td>
+<td>+ migrate Job → helm upgrade</td>
+<td>GKE rollout</td>
+</tr>
+</tbody></table></div>
+<h3 id="f21-edge-cases"><span class="secnum">19.5.5</span> Edge cases</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Situation</th>
+<th>Expected</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">EC-21.1</td>
+<td>Tag pushed on a feature branch</td>
+<td>FE <code>guard</code> fails. BE should add the same guard</td>
+</tr>
+<tr>
+<td class="nw">EC-21.2</td>
+<td>Two tags pushed in a row</td>
+<td>Concurrency queues them; the second runs after the first</td>
+</tr>
+<tr>
+<td class="nw">EC-21.3</td>
+<td>Flaky test on release</td>
+<td>Release fails; re-run the job. Never skip tests on tags</td>
+</tr>
+<tr>
+<td class="nw">EC-21.4</td>
+<td>Need to roll back</td>
+<td>Re-deploy the previous Vercel deployment (<code>vercel promote</code>) and <code>helm rollback</code> (F22)</td>
+</tr>
+</tbody></table></div>
+<h3 id="f21-acceptance-criteria"><span class="secnum">19.5.6</span> Acceptance criteria</h3>
+<ul>
+<li><strong>AC-21.1</strong> Given a tag on a commit not on <code>master</code>, when FE CD runs, then <code>guard</code> fails and nothing deploys.</li>
+<li><strong>AC-21.2</strong> Given a PR with a lint warning, when CI runs, then the PR is blocked.</li>
+<li><strong>AC-21.3</strong> Given a BE tag, when release finishes, then the image with that tag exists and no JSON key was used.</li>
+</ul>
+<h3 id="f21-implementation-gaps"><span class="secnum">19.5.7</span> Implementation gaps</h3>
+<ul>
+<li>league-be has no tag-on-master guard.</li>
+<li>No deploy job for the backend (F22).</li>
+<li>Actions aren&#39;t pinned to SHAs in either repo.</li>
+</ul>
+<h3 id="f21-open-questions"><span class="secnum">19.5.8</span> Open questions</h3>
+<ul>
+<li>Should merges to <code>master</code> deploy staging automatically (F23)? Default: yes.</li>
+</ul>
+</section>
+
+<h2 id="f22"><span class="secnum">19.6</span> F22 — GKE deployment</h2>
+<section class="feature"><div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>Status</th>
+<th>Rules</th>
+<th>Repo refs</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1</td>
+<td><span class="badge b-notstarted">Not started</span></td>
+<td>NFR-02, NFR-08 · <a href="../12-infra-devops.html">12 §4</a></td>
+<td><code>league-be/Dockerfile</code> (EXPOSE 9200) · <code>config/*.yaml</code> (port 5001) · new <code>league-be/deploy/</code></td>
+</tr>
+</tbody></table></div>
+<h3 id="f22-requirements"><span class="secnum">19.6.1</span> Requirements</h3>
+<p><em>As an engineer, my backend tag becomes running pods behind <code>be.mvip-league.com</code>, with the schema migrated first and an automatic rollback if anything fails.</em></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Requirement</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">FR-22.1</td>
+<td>Helm chart in <code>league-be/deploy/helm/league-be</code>: Deployment (≥ 2 replicas, spread across zones), Service, HPA (CPU 70 %, 2–6 pods), PodDisruptionBudget (<code>minAvailable: 1</code>), Gateway HTTPRoute for <code>be.mvip-league.com</code></td>
+</tr>
+<tr>
+<td class="nw">FR-22.2</td>
+<td>One container port. Align the Dockerfile <code>EXPOSE 9200</code> and the YAML <code>5001</code> (<a href="../14-open-questions.html">Q38</a>). Default: <code>8080</code> everywhere</td>
+</tr>
+<tr>
+<td class="nw">FR-22.3</td>
+<td>Probes: liveness <code>GET /api/v1/health</code> (no DB); readiness <code>GET /readyz</code> (new, pings the DB with a 1 s timeout); startup probe with a 30 s budget</td>
+</tr>
+<tr>
+<td class="nw">FR-22.4</td>
+<td>Secrets (<code>GOOGLE_OAUTH_CLIENT_ID/SECRET</code>, <code>ENCRYPTION_KEY</code>, <code>DATABASE_URL</code>) come from Secret Manager through the Secret Store CSI driver and Workload Identity. Nothing secret in YAML or images</td>
+</tr>
+<tr>
+<td class="nw">FR-22.5</td>
+<td>Cloud SQL Postgres 16 with private IP, automated daily backups, PITR 7 days, <code>max_connections</code> sized to pods × pool</td>
+</tr>
+<tr>
+<td class="nw">FR-22.6</td>
+<td><code>release.yaml</code> gains <code>deploy</code>: <code>get-gke-credentials</code> → run the <code>migrate</code> Job and wait → <code>helm upgrade --install --atomic --timeout 5m --set image.tag=&lt;tag&gt;</code></td>
+</tr>
+<tr>
+<td class="nw">FR-22.7</td>
+<td>Graceful shutdown: on SIGTERM, fail readiness, drain for 10 s, then <code>server.Shutdown</code> with a 20 s budget</td>
+</tr>
+<tr>
+<td class="nw">FR-22.8</td>
+<td>Freeze window: no production deploy Mon–Fri 17:00–23:30 ICT (league nights). The job checks the time and fails unless <code>force_deploy</code> is set</td>
+</tr>
+<tr>
+<td class="nw">FR-22.9</td>
+<td>Resources: requests 100m CPU / 128 Mi, limits 500m / 256 Mi. <code>securityContext</code> non-root, read-only root filesystem</td>
+</tr>
+</tbody></table></div>
+<h3 id="f22-topology"><span class="secnum">19.6.2</span> Topology</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E06-platform-delivery-f22-1.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E06-platform-delivery-f22-1.svg" alt="Diagram: 19 - Platform &amp; Delivery" loading="lazy" data-diagram-file="features_E06-platform-delivery-f22-1.svg" width="1077" height="519"></a><figcaption><span>Everything here is red: none of it exists yet. It is the go-live blocker next to E02.</span><a class="full" href="../assets/diagrams/features_E06-platform-delivery-f22-1.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="f22-logic-deploy-job"><span class="secnum">19.6.3</span> Logic: deploy job</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E06-platform-delivery-f22-2.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E06-platform-delivery-f22-2.svg" alt="Diagram: 19 - Platform &amp; Delivery" loading="lazy" data-diagram-file="features_E06-platform-delivery-f22-2.svg" width="668" height="1081"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_E06-platform-delivery-f22-2.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="f22-flow-rolling-update"><span class="secnum">19.6.4</span> Flow: rolling update</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E06-platform-delivery-f22-3.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E06-platform-delivery-f22-3.svg" alt="Diagram: 19 - Platform &amp; Delivery" loading="lazy" data-diagram-file="features_E06-platform-delivery-f22-3.svg" width="1087" height="583"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_E06-platform-delivery-f22-3.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="f22-api--data"><span class="secnum">19.6.5</span> API &amp; data</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>GET /api/v1/health</code></td>
+<td><code>200 {&quot;status&quot;:&quot;ok&quot;}</code> with no DB call</td>
+</tr>
+<tr>
+<td><code>GET /readyz</code></td>
+<td><code>200</code> when the DB ping succeeds, <code>503</code> otherwise. Not under <code>/api/v1</code>, not exposed via the Gateway</td>
+</tr>
+<tr>
+<td>Pool</td>
+<td><code>pgxpool</code> max 10 per pod → 6 pods × 10 + migrate + admin &lt; 100 connections</td>
+</tr>
+<tr>
+<td>Config</td>
+<td><code>APP_ENV=production</code>, <code>PORT=8080</code>, <code>ALLOWED_ORIGINS=https://www.mvip-league.com</code></td>
+</tr>
+</tbody></table></div>
+<h3 id="f22-edge-cases"><span class="secnum">19.6.6</span> Edge cases</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Situation</th>
+<th>Expected</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">EC-22.1</td>
+<td>A migration takes a long table lock</td>
+<td>Migrations follow expand/contract (F43). Use <code>lock_timeout = 5s</code> so the Job fails rather than blocking traffic</td>
+</tr>
+<tr>
+<td class="nw">EC-22.2</td>
+<td>Cloud SQL failover</td>
+<td>Readiness fails briefly; pods stay alive (liveness doesn&#39;t touch the DB) and recover</td>
+</tr>
+<tr>
+<td class="nw">EC-22.3</td>
+<td>A node is drained during a league night</td>
+<td>The PDB keeps one pod serving</td>
+</tr>
+<tr>
+<td class="nw">EC-22.4</td>
+<td>Cookie domain</td>
+<td><code>__Host-sid</code> has no Domain and is bound to <code>be.mvip-league.com</code>. The FE calls it cross-site with <code>withCredentials</code> (see <a href="../05-architecture.html">05 §3</a>)</td>
+</tr>
+</tbody></table></div>
+<h3 id="f22-acceptance-criteria"><span class="secnum">19.6.7</span> Acceptance criteria</h3>
+<ul>
+<li><strong>AC-22.1</strong> Given a new tag, when release finishes, then two pods run the new image and <code>/readyz</code> returns 200 through port-forward.</li>
+<li><strong>AC-22.2</strong> Given a failing migration, when release runs, then the deploy stops and the previous pods still serve 200.</li>
+<li><strong>AC-22.3</strong> Given a k6 smoke test during a rollout, then no request fails with 5xx.</li>
+<li><strong>AC-22.4</strong> Given 18:00 ICT on a Tuesday, when a tag is pushed, then the deploy job refuses.</li>
+</ul>
+<h3 id="f22-open-questions"><span class="secnum">19.6.8</span> Open questions</h3>
+<ul>
+<li>GKE Autopilot vs Standard? Default: <strong>Autopilot</strong>, for less ops at this scale.</li>
+<li><a href="../14-open-questions.html">Q38</a> port alignment.</li>
+</ul>
+</section>
+
+<h2 id="f23"><span class="secnum">19.7</span> F23 — Staging and Google consent screen</h2>
+<section class="feature"><div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>Status</th>
+<th>Rules</th>
+<th>Repo refs</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1</td>
+<td><span class="badge b-notstarted">Not started</span></td>
+<td class="nw">ADR-003</td>
+<td><code>league-be/config/{development,production}.yaml</code> · <code>internal/auth/cookies.go</code> (<code>isSecure</code>) · <code>league-fe/.env.*</code></td>
+</tr>
+</tbody></table></div>
+<h3 id="f23-requirements"><span class="secnum">19.7.1</span> Requirements</h3>
+<p><em>As the league owner, I try every release with real captains on staging before it reaches league night, and players see a verified Google consent screen, not an &quot;unverified app&quot; warning.</em></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Requirement</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">FR-23.1</td>
+<td>Staging hosts <code>staging.mvip-league.com</code> (FE) and <code>be-staging.mvip-league.com</code> (BE), with their own Vercel project or environment, GKE namespace <code>league-staging</code>, and Cloud SQL database <code>league_staging</code></td>
+</tr>
+<tr>
+<td class="nw">FR-23.2</td>
+<td>A separate Google OAuth client for staging, with redirect <code>https://be-staging.mvip-league.com/api/v1/auth/google/callback</code></td>
+</tr>
+<tr>
+<td class="nw">FR-23.3</td>
+<td><code>config/staging.yaml</code> with <code>APP_ENV=staging</code>. Cookies are <code>Secure</code> and <code>SameSite=None</code>, without the <code>__Host-</code>/<code>__Secure-</code> prefixes so they can&#39;t collide with production</td>
+</tr>
+<tr>
+<td class="nw">FR-23.4</td>
+<td>Merges to <code>master</code> deploy staging automatically; tags deploy production (F21)</td>
+</tr>
+<tr>
+<td class="nw">FR-23.5</td>
+<td>Seed staging with the beta division (F9 seed + anonymised player names)</td>
+</tr>
+<tr>
+<td class="nw">FR-23.6</td>
+<td>Publish the Google OAuth consent screen (it&#39;s in Testing mode, capped at 100 test users): app name &quot;MViP League&quot;, logo, support email, privacy policy and terms URLs on <code>www.mvip-league.com</code>, verified domain <code>mvip-league.com</code>, scopes <code>openid email profile</code> only</td>
+</tr>
+<tr>
+<td class="nw">FR-23.7</td>
+<td>A visible &quot;STAGING&quot; ribbon in the FE when <code>VITE_APP_ENV=staging</code></td>
+</tr>
+</tbody></table></div>
+<h3 id="f23-logic-which-config-wins"><span class="secnum">19.7.2</span> Logic: which config wins</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E06-platform-delivery-f23-1.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E06-platform-delivery-f23-1.svg" alt="Diagram: 19 - Platform &amp; Delivery" loading="lazy" data-diagram-file="features_E06-platform-delivery-f23-1.svg" width="818" height="353"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_E06-platform-delivery-f23-1.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="f23-flow-release-through-staging"><span class="secnum">19.7.3</span> Flow: release through staging</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E06-platform-delivery-f23-2.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E06-platform-delivery-f23-2.svg" alt="Diagram: 19 - Platform &amp; Delivery" loading="lazy" data-diagram-file="features_E06-platform-delivery-f23-2.svg" width="1220" height="465"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_E06-platform-delivery-f23-2.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="f23-consent-screen-checklist"><span class="secnum">19.7.4</span> Consent screen checklist</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>App name</td>
+<td>MViP League</td>
+</tr>
+<tr>
+<td>User support email</td>
+<td>league owner&#39;s address</td>
+</tr>
+<tr>
+<td>App logo</td>
+<td>120 × 120 PNG, same mark as the PWA icon</td>
+</tr>
+<tr>
+<td>Authorized domains</td>
+<td><code>mvip-league.com</code></td>
+</tr>
+<tr>
+<td>Links</td>
+<td><code>/privacy</code>, <code>/terms</code> (static pages in league-fe)</td>
+</tr>
+<tr>
+<td>Scopes</td>
+<td><code>openid</code>, <code>email</code>, <code>profile</code> (non-sensitive, so no security review)</td>
+</tr>
+<tr>
+<td>Publishing status</td>
+<td>Testing → <strong>In production</strong></td>
+</tr>
+</tbody></table></div>
+<h3 id="f23-edge-cases"><span class="secnum">19.7.5</span> Edge cases</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Situation</th>
+<th>Expected</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">EC-23.1</td>
+<td>Someone signs in on staging with the same Google account as production</td>
+<td>Separate DB and session tables, so two independent users exist</td>
+</tr>
+<tr>
+<td class="nw">EC-23.2</td>
+<td>Staging is down during a demo</td>
+<td>No impact on production; nothing is shared except Artifact Registry</td>
+</tr>
+<tr>
+<td class="nw">EC-23.3</td>
+<td>Google verification takes days</td>
+<td>Start in week 1. Until then, add beta testers as test users (≤ 100)</td>
+</tr>
+</tbody></table></div>
+<h3 id="f23-acceptance-criteria"><span class="secnum">19.7.6</span> Acceptance criteria</h3>
+<ul>
+<li><strong>AC-23.1</strong> Given a session on staging, when the user opens production, then they are signed out there.</li>
+<li><strong>AC-23.2</strong> Given the consent screen is published, when a new Google user signs in, then no &quot;unverified app&quot; screen appears.</li>
+<li><strong>AC-23.3</strong> Given a merge to <code>master</code>, then staging runs the new build within 15 minutes.</li>
+</ul>
+<h3 id="f23-implementation-gaps"><span class="secnum">19.7.7</span> Implementation gaps</h3>
+<ul>
+<li>No <code>staging.yaml</code>, no staging hosts, and no privacy or terms pages.</li>
+</ul>
+<h3 id="f23-open-questions"><span class="secnum">19.7.8</span> Open questions</h3>
+<ul>
+<li>Should staging share the production Cloud SQL instance (a separate database) to save cost? Default: yes, a separate database on the same small instance.</li>
+</ul>
+</section>
+
+<h2 id="f24"><span class="secnum">19.8</span> F24 — Generated API types and FE/BE integration test</h2>
+<section class="feature"><div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>Status</th>
+<th>Rules</th>
+<th>Repo refs</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1</td>
+<td><span class="badge b-notstarted">Not started</span></td>
+<td class="nw">ADR-008</td>
+<td><code>league-be/docs/swagger.json</code> (2.0, from swag annotations) · <code>league-fe/src/types/league.ts</code> (hand-written) · <code>src/api/leagueAPI.ts</code></td>
+</tr>
+</tbody></table></div>
+<h3 id="f24-requirements"><span class="secnum">19.8.1</span> Requirements</h3>
+<p><em>As an engineer, when the backend changes a field, the front end fails to compile instead of failing on league night.</em></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Requirement</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">FR-24.1</td>
+<td>The backend publishes an OpenAPI 3 document: <code>make swagger</code> runs swag, then <code>swagger2openapi</code> → <code>docs/openapi.json</code> (committed)</td>
+</tr>
+<tr>
+<td class="nw">FR-24.2</td>
+<td>The FE runs <code>pnpm gen:api</code> = <code>openapi-typescript ../league-be/docs/openapi.json -o src/types/api.gen.ts</code> (or from a pinned URL/tag in CI)</td>
+</tr>
+<tr>
+<td class="nw">FR-24.3</td>
+<td><code>leagueAPI.ts</code> uses <code>components[&quot;schemas&quot;][…]</code> types. Delete the hand-written <code>src/types/league.ts</code></td>
+</tr>
+<tr>
+<td class="nw">FR-24.4</td>
+<td>CI: BE fails if <code>openapi.json</code> is stale; FE fails if <code>api.gen.ts</code> differs from a fresh generation</td>
+</tr>
+<tr>
+<td class="nw">FR-24.5</td>
+<td>Fix known swagger drift: user <code>id</code> is a UUID string, not an integer (<a href="../14-open-questions.html">Q39</a>); the envelope <code>{session_id, count, data, metadata}</code> is described once and reused</td>
+</tr>
+<tr>
+<td class="nw">FR-24.6</td>
+<td><strong>Integration gate</strong> before go-live: FE and BE together in a real browser, locally (<code>docker compose up</code> + <code>pnpm dev</code>) and against staging, using the checklist below</td>
+</tr>
+</tbody></table></div>
+<h3 id="f24-flow-type-generation"><span class="secnum">19.8.2</span> Flow: type generation</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E06-platform-delivery-f24-1.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E06-platform-delivery-f24-1.svg" alt="Diagram: 19 - Platform &amp; Delivery" loading="lazy" data-diagram-file="features_E06-platform-delivery-f24-1.svg" width="1817" height="258"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_E06-platform-delivery-f24-1.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="f24-flow-integration-smoke-test"><span class="secnum">19.8.3</span> Flow: integration smoke test</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E06-platform-delivery-f24-2.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E06-platform-delivery-f24-2.svg" alt="Diagram: 19 - Platform &amp; Delivery" loading="lazy" data-diagram-file="features_E06-platform-delivery-f24-2.svg" width="1077" height="685"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_E06-platform-delivery-f24-2.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="f24-integration-checklist"><span class="secnum">19.8.4</span> Integration checklist</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>Check</th>
+<th>Why</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1</td>
+<td><code>GET</code> requests send no <code>OPTIONS</code> preflight</td>
+<td>Only simple headers on reads</td>
+</tr>
+<tr>
+<td>2</td>
+<td><code>POST</code>/<code>PUT</code> preflight allows <code>X-CSRF-Token</code> and credentials for the exact FE origin</td>
+<td>CORS + CSRF</td>
+</tr>
+<tr>
+<td>3</td>
+<td>The session cookie reaches <code>be.</code> from <code>www.</code> in Safari, Chrome and Firefox</td>
+<td>Third-party cookie rules; see <a href="../05-architecture.html">05 §3</a></td>
+</tr>
+<tr>
+<td>4</td>
+<td>Logout without the CSRF header returns <code>40301</code></td>
+<td>CSRF works</td>
+</tr>
+<tr>
+<td>5</td>
+<td>A 401 on any call except <code>/me</code> hard-redirects to <code>/login</code></td>
+<td>The interceptor</td>
+</tr>
+<tr>
+<td>6</td>
+<td>The full seeded night totals match <code>team_standings</code></td>
+<td>Rules in Postgres agree with the UI</td>
+</tr>
+</tbody></table></div>
+<h3 id="f24-edge-cases"><span class="secnum">19.8.5</span> Edge cases</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Situation</th>
+<th>Expected</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">EC-24.1</td>
+<td>The backend adds an optional field</td>
+<td>The generated type gains it; no FE break</td>
+</tr>
+<tr>
+<td class="nw">EC-24.2</td>
+<td>The backend renames a field</td>
+<td>The FE typecheck fails in the PR that regenerates</td>
+</tr>
+<tr>
+<td class="nw">EC-24.3</td>
+<td>Safari blocks third-party cookies</td>
+<td>If check 3 fails, serve the API under <code>www.mvip-league.com/api</code> through a Vercel rewrite (fallback in <a href="../05-architecture.html">05</a>)</td>
+</tr>
+</tbody></table></div>
+<h3 id="f24-acceptance-criteria"><span class="secnum">19.8.6</span> Acceptance criteria</h3>
+<ul>
+<li><strong>AC-24.1</strong> Given a Go response field change without regeneration, when FE CI runs, then it fails.</li>
+<li><strong>AC-24.2</strong> Given staging, when the checklist runs on iOS Safari and Android Chrome, then all six checks pass.</li>
+</ul>
+<h3 id="f24-implementation-gaps"><span class="secnum">19.8.7</span> Implementation gaps</h3>
+<ul>
+<li>Swagger is 2.0 only, and <code>src/types/league.ts</code> is hand-written.</li>
+<li>The league endpoints don&#39;t exist yet (E02-F10), so they have no annotations.</li>
+</ul>
+<h3 id="f24-open-questions"><span class="secnum">19.8.8</span> Open questions</h3>
+<ul>
+<li>Generate from a URL (<code>/swagger/doc.json</code> on staging) or from the committed file? Default: the committed file at a pinned BE tag.</li>
+</ul>
+</section>
+
+<h2 id="f25"><span class="secnum">19.9</span> F25 — Rate limiting, structured logs, Vietnamese default</h2>
+<section class="feature"><div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>Status</th>
+<th>Rules</th>
+<th>Repo refs</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1</td>
+<td><span class="badge b-notstarted">Not started</span></td>
+<td>NFR-07, NFR-09 · <a href="../11-security-and-roles.html">11 §6</a></td>
+<td><code>league-be/internal/middleware/*</code> (<code>ContextKeyRequestID</code> exists, unused) · <code>league-fe/src/i18n/index.ts</code> (<code>lng: &#39;en&#39;</code>)</td>
+</tr>
+</tbody></table></div>
+<h3 id="f25-requirements"><span class="secnum">19.9.1</span> Requirements</h3>
+<p><em>As the operator, abusive traffic is stopped at the edge, every request can be traced in the logs, and Vietnamese players see Vietnamese first.</em></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Requirement</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">FR-25.1</td>
+<td><strong>Edge limits (Cloudflare rules, no code):</strong> <code>/api/v1/auth/*</code> 10 req/min per IP; <code>/api/v1/members/preview</code> 20 req/min per IP; respond 429 with <code>Retry-After</code></td>
+</tr>
+<tr>
+<td class="nw">FR-25.2</td>
+<td><strong>App limiter</strong> on writes (<code>POST/PUT/PATCH/DELETE</code>): token bucket of 60/min per user, burst 120. Over the limit → 429 with error <code>42901</code>. Phase 1 is in-memory per pod; Phase 2 moves it to Redis (F42)</td>
+</tr>
+<tr>
+<td class="nw">FR-25.3</td>
+<td><strong>Request ID:</strong> accept a valid inbound <code>X-Request-Id</code> or create a UUIDv7, put it in context, and echo it in the response header</td>
+</tr>
+<tr>
+<td class="nw">FR-25.4</td>
+<td><strong>Structured logs</strong> via <code>log/slog</code> JSON: <code>time, level, msg, request_id, method, route, status, latency_ms, user_id, error_code</code>. Cloud Logging severity mapping</td>
+</tr>
+<tr>
+<td class="nw">FR-25.5</td>
+<td><strong>Never log</strong> request or response bodies, cookies, <code>Authorization</code>, OAuth codes or tokens, or member IDs typed during onboarding</td>
+</tr>
+<tr>
+<td class="nw">FR-25.6</td>
+<td><strong>Locale:</strong> the default is <code>vi</code>. Order: <code>localStorage.locale</code> → <code>navigator.language</code> starts with <code>en</code> → <code>vi</code>. A switcher in the header menu (&quot;Tiếng Việt&quot; / &quot;English&quot;) persists the choice and sets <code>&lt;html lang&gt;</code></td>
+</tr>
+<tr>
+<td class="nw">FR-25.7</td>
+<td>Dates and numbers use <code>Intl</code> with the active locale and the <code>Asia/Ho_Chi_Minh</code> time zone</td>
+</tr>
+</tbody></table></div>
+<h3 id="f25-logic-request-pipeline"><span class="secnum">19.9.2</span> Logic: request pipeline</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E06-platform-delivery-f25-1.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E06-platform-delivery-f25-1.svg" alt="Diagram: 19 - Platform &amp; Delivery" loading="lazy" data-diagram-file="features_E06-platform-delivery-f25-1.svg" width="1724" height="290"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_E06-platform-delivery-f25-1.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h4 id="f25-locale-resolution">Locale resolution</h4>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E06-platform-delivery-f25-2.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E06-platform-delivery-f25-2.svg" alt="Diagram: 19 - Platform &amp; Delivery" loading="lazy" data-diagram-file="features_E06-platform-delivery-f25-2.svg" width="392" height="676"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_E06-platform-delivery-f25-2.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="f25-flow-tracing-one-bad-request"><span class="secnum">19.9.3</span> Flow: tracing one bad request</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E06-platform-delivery-f25-3.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E06-platform-delivery-f25-3.svg" alt="Diagram: 19 - Platform &amp; Delivery" loading="lazy" data-diagram-file="features_E06-platform-delivery-f25-3.svg" width="1411" height="539"></a><figcaption><span>The reference shown in the toast lets the admin find the exact log line.</span><a class="full" href="../assets/diagrams/features_E06-platform-delivery-f25-3.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="f25-api--data"><span class="secnum">19.9.4</span> API &amp; data</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>New error code</td>
+<td><code>42901</code> Too many requests → <code>apiError.42901</code> &quot;Too many attempts, wait a minute and try again&quot;</td>
+</tr>
+<tr>
+<td>Response header</td>
+<td><code>X-Request-Id</code> on every response, exposed via CORS <code>Access-Control-Expose-Headers</code></td>
+</tr>
+<tr>
+<td>Log example</td>
+<td><code>{&quot;level&quot;:&quot;INFO&quot;,&quot;msg&quot;:&quot;http&quot;,&quot;request_id&quot;:&quot;0193…&quot;,&quot;method&quot;:&quot;PUT&quot;,&quot;route&quot;:&quot;/api/v1/individual-matches/{id}&quot;,&quot;status&quot;:200,&quot;latency_ms&quot;:41,&quot;user_id&quot;:&quot;a3f…&quot;}</code></td>
+</tr>
+</tbody></table></div>
+<h3 id="f25-edge-cases"><span class="secnum">19.9.5</span> Edge cases</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Situation</th>
+<th>Expected</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">EC-25.1</td>
+<td>Many players behind one venue Wi-Fi IP</td>
+<td>Edge limits apply only to auth and preview. App limits are per user, so a hall doesn&#39;t get blocked</td>
+</tr>
+<tr>
+<td class="nw">EC-25.2</td>
+<td>Two pods, in-memory limiter</td>
+<td>The effective limit is up to 2×; acceptable in Phase 1</td>
+</tr>
+<tr>
+<td class="nw">EC-25.3</td>
+<td>Inbound <code>X-Request-Id</code> is huge or malformed</td>
+<td>Ignore it and create a new one</td>
+</tr>
+<tr>
+<td class="nw">EC-25.4</td>
+<td>A user switches language mid-night</td>
+<td>Labels change immediately; drafts are kept</td>
+</tr>
+</tbody></table></div>
+<h3 id="f25-acceptance-criteria"><span class="secnum">19.9.6</span> Acceptance criteria</h3>
+<ul>
+<li><strong>AC-25.1</strong> Given 21 preview requests from one IP in a minute, then the 21st returns 429.</li>
+<li><strong>AC-25.2</strong> Given any response, then its <code>X-Request-Id</code> matches exactly one access-log line.</li>
+<li><strong>AC-25.3</strong> Given a new device with a Vietnamese browser, when the app opens, then the copy is Vietnamese.</li>
+<li><strong>AC-25.4</strong> Given a grep of a day&#39;s logs for <code>Cookie</code> or <code>code=</code>, then there are zero hits.</li>
+</ul>
+<h3 id="f25-implementation-gaps"><span class="secnum">19.9.7</span> Implementation gaps</h3>
+<ul>
+<li><code>ContextKeyRequestID</code> is defined but never set; logs use the default text logger.</li>
+<li><code>i18n</code> hard-codes <code>lng: &#39;en&#39;</code>.</li>
+</ul>
+<h3 id="f25-open-questions"><span class="secnum">19.9.8</span> Open questions</h3>
+<ul>
+<li>Should &quot;Ref&quot; IDs be shown to all users or only admins? Default: everyone, in a collapsed &quot;Details&quot;.</li>
+</ul>
+</section>
+
+<h2 id="f42"><span class="secnum">19.10</span> F42 — Worker, outbox, Redis</h2>
+<section class="feature"><div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>Status</th>
+<th>Rules</th>
+<th>Repo refs</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>2</td>
+<td><span class="badge b-target">Target</span></td>
+<td>ADR-006 · <a href="../10-backend-design.html">10 §7</a></td>
+<td>new <code>league-be/cmd/worker</code>, <code>internal/outbox</code>, <code>migrations/*_outbox.sql</code></td>
+</tr>
+</tbody></table></div>
+<h3 id="f42-requirements"><span class="secnum">19.10.1</span> Requirements</h3>
+<p><em>As an engineer, side effects (messages, fees, suggestions) happen reliably after a change commits. They are never lost and never sent twice, even if a pod dies.</em></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Requirement</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">FR-42.1</td>
+<td>Table <code>outbox (id uuid, type text, aggregate_id text, payload jsonb, created_at, available_at, attempts int, last_error text, done_at)</code></td>
+</tr>
+<tr>
+<td class="nw">FR-42.2</td>
+<td>Domain writes insert outbox rows <strong>in the same transaction</strong> (e.g. <code>TeamMatchSubmitted</code>, <code>SkillLevelChanged</code>, <code>RosterChanged</code>, <code>PaymentSucceeded</code>, <code>DisputeOpened</code>)</td>
+</tr>
+<tr>
+<td class="nw">FR-42.3</td>
+<td><code>cmd/worker</code> (its own Deployment, 1–2 replicas) loops: claim up to 100 rows <code>WHERE done_at IS NULL AND available_at &lt;= now() ORDER BY created_at FOR UPDATE SKIP LOCKED</code>, dispatch by <code>type</code>, then mark done</td>
+</tr>
+<tr>
+<td class="nw">FR-42.4</td>
+<td>Failure → <code>attempts + 1</code>, <code>available_at = now() + backoff(attempts)</code> (10 s × 2ⁿ, max 1 h). After 10 attempts, it&#39;s dead-lettered (<code>done_at</code> stays null, <code>type</code> flagged) and alerts (F44)</td>
+</tr>
+<tr>
+<td class="nw">FR-42.5</td>
+<td>Handlers are idempotent: table <code>processed_events (handler, event_id) PRIMARY KEY</code> is checked and inserted in the handler&#39;s own transaction</td>
+</tr>
+<tr>
+<td class="nw">FR-42.6</td>
+<td>Redis (Memorystore, Standard tier) for: live-scoring state and pub/sub (E07), scoring leases (F30), rate-limit buckets (F25), short caches. <strong>Postgres stays the source of truth</strong></td>
+</tr>
+<tr>
+<td class="nw">FR-42.7</td>
+<td>Housekeeping: delete done outbox rows older than 14 days, nightly</td>
+</tr>
+</tbody></table></div>
+<h3 id="f42-logic-worker-loop"><span class="secnum">19.10.2</span> Logic: worker loop</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E06-platform-delivery-f42-1.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E06-platform-delivery-f42-1.svg" alt="Diagram: 19 - Platform &amp; Delivery" loading="lazy" data-diagram-file="features_E06-platform-delivery-f42-1.svg" width="782" height="1230"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_E06-platform-delivery-f42-1.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="f42-flow"><span class="secnum">19.10.3</span> Flow</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E06-platform-delivery-f42-2.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E06-platform-delivery-f42-2.svg" alt="Diagram: 19 - Platform &amp; Delivery" loading="lazy" data-diagram-file="features_E06-platform-delivery-f42-2.svg" width="1492" height="581"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_E06-platform-delivery-f42-2.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="f42-event-catalogue"><span class="secnum">19.10.4</span> Event catalogue</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Type</th>
+<th>Produced by</th>
+<th>Handlers</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>TeamMatchSubmitted</code></td>
+<td>F15 submit</td>
+<td>notify both teams (F40), standings cache bust (F35), SL suggestion check (F33)</td>
+</tr>
+<tr>
+<td><code>SkillLevelChanged</code></td>
+<td class="nw">F18</td>
+<td>notify the player (F40), audit (F41)</td>
+</tr>
+<tr>
+<td><code>RosterChanged</code></td>
+<td>F16, F19</td>
+<td>fee line for a new member (F36)</td>
+</tr>
+<tr>
+<td><code>PaymentSucceeded</code></td>
+<td>F36 webhook</td>
+<td>mark member paid, receipt message (F40)</td>
+</tr>
+<tr>
+<td><code>DisputeOpened</code> / <code>DisputeResolved</code></td>
+<td class="nw">F31</td>
+<td>notify the admin and both captains (F40)</td>
+</tr>
+</tbody></table></div>
+<h3 id="f42-edge-cases"><span class="secnum">19.10.5</span> Edge cases</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Situation</th>
+<th>Expected</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">EC-42.1</td>
+<td>Worker killed mid-batch</td>
+<td>The row locks release on disconnect; another worker reclaims them. <code>processed_events</code> prevents a double send</td>
+</tr>
+<tr>
+<td class="nw">EC-42.2</td>
+<td>A transaction rolls back</td>
+<td>No outbox row exists, so nothing is sent</td>
+</tr>
+<tr>
+<td class="nw">EC-42.3</td>
+<td>Redis lost</td>
+<td>Live views degrade to polling Postgres (E07). Rate limits fall back to in-memory</td>
+</tr>
+<tr>
+<td class="nw">EC-42.4</td>
+<td>Event order for one aggregate</td>
+<td>Handlers must not depend on order. Where they must, they read current state from Postgres</td>
+</tr>
+</tbody></table></div>
+<h3 id="f42-acceptance-criteria"><span class="secnum">19.10.6</span> Acceptance criteria</h3>
+<ul>
+<li><strong>AC-42.1</strong> Given the worker is killed after the send but before marking done, when it restarts, then the message is not sent again.</li>
+<li><strong>AC-42.2</strong> Given Zalo returns 500 three times, then the row is retried with growing delays and then succeeds.</li>
+<li><strong>AC-42.3</strong> Given 10 failures, then the row is dead-lettered and an alert fires.</li>
+</ul>
+<h3 id="f42-open-questions"><span class="secnum">19.10.7</span> Open questions</h3>
+<ul>
+<li>Use LISTEN/NOTIFY to wake the worker instantly? Default: no; 1 s polling is enough.</li>
+</ul>
+</section>
+
+<h2 id="f44"><span class="secnum">19.11</span> F44 — Monitoring and error tracking</h2>
+<section class="feature"><div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>Status</th>
+<th>Rules</th>
+<th>Repo refs</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>2</td>
+<td><span class="badge b-target">Target</span></td>
+<td>NFR-01, NFR-02, NFR-11 · <a href="../12-infra-devops.html">12 §6</a></td>
+<td>new <code>league-be/internal/telemetry</code> · <code>league-fe/src/lib/monitoring.ts</code></td>
+</tr>
+</tbody></table></div>
+<h3 id="f44-requirements"><span class="secnum">19.11.1</span> Requirements</h3>
+<p><em>As the on-call engineer, I know something is wrong on league night before a captain calls me, and I can see exactly which request failed.</em></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Requirement</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">FR-44.1</td>
+<td>OpenTelemetry SDK in the API and worker: HTTP server spans (route templates, not raw paths), pgx spans, outgoing HTTP spans. Export to Cloud Trace; sample 10 %, plus 100 % of errors</td>
+</tr>
+<tr>
+<td class="nw">FR-44.2</td>
+<td>Metrics to Managed Prometheus: <code>http_server_duration</code> (route, status), <code>db_pool_in_use</code>, <code>outbox_lag_seconds</code>, <code>outbox_dead_letters</code>, <code>ws_connections</code> (E07), business counters <code>putups_total</code>, <code>results_total</code>, <code>nights_submitted_total</code></td>
+</tr>
+<tr>
+<td class="nw">FR-44.3</td>
+<td>Dashboards: <strong>Golden signals</strong> (rate, errors, p50/p95/p99, saturation) and <strong>League night</strong> (active nights, put-ups and results per minute, submit funnel, slowest routes)</td>
+</tr>
+<tr>
+<td class="nw">FR-44.4</td>
+<td>Alerts, routed to Zalo/Telegram for the on-call: p95 &gt; 500 ms for 5 min · 5xx &gt; 1 % for 5 min · outbox lag &gt; 60 s · any dead letter · DB CPU &gt; 80 % for 10 min · uptime check failing 2 of 3 regions</td>
+</tr>
+<tr>
+<td class="nw">FR-44.5</td>
+<td>Sentry for the FE (React error boundary, unhandled rejections) and the BE (panics, 5xx). Release = git tag; FE source maps uploaded in CD and not served publicly</td>
+</tr>
+<tr>
+<td class="nw">FR-44.6</td>
+<td>PII: no emails, names or member IDs in spans, metrics labels or Sentry events. User = hashed user ID</td>
+</tr>
+<tr>
+<td class="nw">FR-44.7</td>
+<td>Uptime checks: <code>https://www.mvip-league.com/</code> and <code>https://be.mvip-league.com/api/v1/health</code> every minute</td>
+</tr>
+</tbody></table></div>
+<h3 id="f44-components"><span class="secnum">19.11.2</span> Components</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E06-platform-delivery-f44-1.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E06-platform-delivery-f44-1.svg" alt="Diagram: 19 - Platform &amp; Delivery" loading="lazy" data-diagram-file="features_E06-platform-delivery-f44-1.svg" width="921" height="603"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_E06-platform-delivery-f44-1.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="f44-flow-from-alert-to-fix"><span class="secnum">19.11.3</span> Flow: from alert to fix</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E06-platform-delivery-f44-2.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E06-platform-delivery-f44-2.svg" alt="Diagram: 19 - Platform &amp; Delivery" loading="lazy" data-diagram-file="features_E06-platform-delivery-f44-2.svg" width="1125" height="525"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_E06-platform-delivery-f44-2.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="f44-edge-cases"><span class="secnum">19.11.4</span> Edge cases</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Situation</th>
+<th>Expected</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">EC-44.1</td>
+<td>Alert storm during an outage</td>
+<td>Alerts group by policy; one page per incident</td>
+</tr>
+<tr>
+<td class="nw">EC-44.2</td>
+<td>High-cardinality labels (IDs)</td>
+<td>Forbidden in metrics; IDs belong in traces and logs only</td>
+</tr>
+<tr>
+<td class="nw">EC-44.3</td>
+<td>Sentry quota</td>
+<td>Sample FE errors at 50 % and drop known browser-extension noise</td>
+</tr>
+</tbody></table></div>
+<h3 id="f44-acceptance-criteria"><span class="secnum">19.11.5</span> Acceptance criteria</h3>
+<ul>
+<li><strong>AC-44.1</strong> Given an injected 500 on staging, then a Sentry issue with the release tag appears within 1 minute and the trace is linked by request ID.</li>
+<li><strong>AC-44.2</strong> Given the worker is stopped for 2 minutes, then the outbox-lag alert fires.</li>
+</ul>
+<h3 id="f44-open-questions"><span class="secnum">19.11.6</span> Open questions</h3>
+<ul>
+<li>Who is on call during league nights, and through which channel?</li>
+</ul>
+</section>
+
+<h2 id="f45"><span class="secnum">19.12</span> F45 — Playwright E2E</h2>
+<section class="feature"><div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>Status</th>
+<th>Rules</th>
+<th>Repo refs</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>2</td>
+<td><span class="badge b-target">Target</span>(new dependency, needs approval)</td>
+<td><a href="../13-nfr-and-testing.html">13 §4</a></td>
+<td>new <code>league-fe/e2e/</code>, <code>playwright.config.ts</code>, <code>league-be/docker-compose.e2e.yaml</code></td>
+</tr>
+</tbody></table></div>
+<h3 id="f45-requirements"><span class="secnum">19.12.1</span> Requirements</h3>
+<p><em>As an engineer, every release proves that two captains can run a full night end to end, in a real browser, against the real backend and database.</em></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Requirement</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">FR-45.1</td>
+<td>Two browser contexts, home captain and away captain, run a full seeded night: 5 put-ups per side (including one blocked by the 23 cap), 5 results (one hill-hill 2/1), submit, then check the standings</td>
+</tr>
+<tr>
+<td class="nw">FR-45.2</td>
+<td>A third context with a player role verifies read-only access (no action bar, direct URLs give 403 copy)</td>
+</tr>
+<tr>
+<td class="nw">FR-45.3</td>
+<td>Auth without Google: a test-only <code>POST /api/v1/test/sessions {userId}</code> route compiled in only when <code>APP_ENV=e2e</code>, which sets the normal cookies. It must not exist in staging or production builds</td>
+</tr>
+<tr>
+<td class="nw">FR-45.4</td>
+<td>Stack: <code>docker compose -f docker-compose.e2e.yaml up</code> (Postgres + migrations + seed + league-be) and <code>vite preview</code></td>
+</tr>
+<tr>
+<td class="nw">FR-45.5</td>
+<td>Runs on PRs that touch <code>src/pages/**</code> or league endpoints, and on every release. Chromium + WebKit, mobile viewport 390 × 844</td>
+</tr>
+<tr>
+<td class="nw">FR-45.6</td>
+<td>Traces, videos and screenshots kept as CI artifacts on failure</td>
+</tr>
+<tr>
+<td class="nw">FR-45.7</td>
+<td>Selectors by role and accessible name only (<code>getByRole</code>), which also checks accessibility</td>
+</tr>
+</tbody></table></div>
+<h3 id="f45-flow-the-night-scenario"><span class="secnum">19.12.2</span> Flow: the night scenario</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E06-platform-delivery-f45-1.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E06-platform-delivery-f45-1.svg" alt="Diagram: 19 - Platform &amp; Delivery" loading="lazy" data-diagram-file="features_E06-platform-delivery-f45-1.svg" width="1136" height="726"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_E06-platform-delivery-f45-1.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="f45-logic-test-only-auth-guard"><span class="secnum">19.12.3</span> Logic: test-only auth guard</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E06-platform-delivery-f45-2.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E06-platform-delivery-f45-2.svg" alt="Diagram: 19 - Platform &amp; Delivery" loading="lazy" data-diagram-file="features_E06-platform-delivery-f45-2.svg" width="475" height="577"></a><figcaption><span>The route exists only in a separate build tag. A unit test asserts that the production router doesn&#39;t have it.</span><a class="full" href="../assets/diagrams/features_E06-platform-delivery-f45-2.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="f45-edge-cases"><span class="secnum">19.12.4</span> Edge cases</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Situation</th>
+<th>Expected</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">EC-45.1</td>
+<td>Flaky waits</td>
+<td>Use web-first assertions; no <code>waitForTimeout</code></td>
+</tr>
+<tr>
+<td class="nw">EC-45.2</td>
+<td>Tests run in parallel</td>
+<td>One database per worker (<code>league_e2e_&lt;n&gt;</code>) or serial execution in one project</td>
+</tr>
+<tr>
+<td class="nw">EC-45.3</td>
+<td>WebKit cookie differences</td>
+<td>The stack serves FE and BE on <code>localhost</code> with different ports, matching production&#39;s cross-site setup</td>
+</tr>
+</tbody></table></div>
+<h3 id="f45-acceptance-criteria"><span class="secnum">19.12.5</span> Acceptance criteria</h3>
+<ul>
+<li><strong>AC-45.1</strong> Given a regression that breaks submit, when the PR runs E2E, then it fails with a trace.</li>
+<li><strong>AC-45.2</strong> Given a production build, then <code>/api/v1/test/sessions</code> returns 404.</li>
+</ul>
+<h3 id="f45-open-questions"><span class="secnum">19.12.6</span> Open questions</h3>
+<ul>
+<li>Approve adding <code>@playwright/test</code> as a dev dependency.</li>
+</ul>
+</section>
+
+<h2 id="f46"><span class="secnum">19.13</span> F46 — Load testing</h2>
+<section class="feature"><div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>Status</th>
+<th>Rules</th>
+<th>Repo refs</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>2</td>
+<td><span class="badge b-target">Target</span></td>
+<td>NFR-01, NFR-11 · <a href="../13-nfr-and-testing.html">13 §5</a></td>
+<td>new <code>league-be/loadtest/league-night.js</code></td>
+</tr>
+</tbody></table></div>
+<h3 id="f46-requirements"><span class="secnum">19.13.1</span> Requirements</h3>
+<p><em>As the owner, I know the platform holds up on our busiest night, plus headroom, before we sign up more venues.</em></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Requirement</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">FR-46.1</td>
+<td>A k6 scenario &quot;league night&quot;: 200 concurrent team matches starting over 15 min. Each runs 10 put-ups, 5 results and 1 submit over 3 h (compressed ×12 to 15 min in CI)</td>
+</tr>
+<tr>
+<td class="nw">FR-46.2</td>
+<td>Background readers: 2,000 virtual players polling the schedule and night view every 30 s; Phase 2 adds 20 live viewers per match over WebSocket</td>
+</tr>
+<tr>
+<td class="nw">FR-46.3</td>
+<td>Auth uses pre-seeded sessions (as in F45); CSRF tokens are read from the cookie</td>
+</tr>
+<tr>
+<td class="nw">FR-46.4</td>
+<td>Thresholds: <code>http_req_duration{p(95)} &lt; 300 ms</code>, <code>http_req_failed &lt; 0.1 %</code>, WS fan-out p95 &lt; 1 s (NFR-11)</td>
+</tr>
+<tr>
+<td class="nw">FR-46.5</td>
+<td>Runs against staging, scaled like production, before each minor release. Results (HTML summary + JSON) are archived as CI artifacts and trended</td>
+</tr>
+<tr>
+<td class="nw">FR-46.6</td>
+<td>A soak variant: 1× load for 3 h to catch leaks and pool exhaustion</td>
+</tr>
+</tbody></table></div>
+<h3 id="f46-load-model"><span class="secnum">19.13.2</span> Load model</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E06-platform-delivery-f46-1.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E06-platform-delivery-f46-1.svg" alt="Diagram: 19 - Platform &amp; Delivery" loading="lazy" data-diagram-file="features_E06-platform-delivery-f46-1.svg" width="672" height="402"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_E06-platform-delivery-f46-1.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="f46-flow-one-virtual-captain"><span class="secnum">19.13.3</span> Flow: one virtual captain</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E06-platform-delivery-f46-2.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E06-platform-delivery-f46-2.svg" alt="Diagram: 19 - Platform &amp; Delivery" loading="lazy" data-diagram-file="features_E06-platform-delivery-f46-2.svg" width="499" height="550"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_E06-platform-delivery-f46-2.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="f46-edge-cases"><span class="secnum">19.13.4</span> Edge cases</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Situation</th>
+<th>Expected</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">EC-46.1</td>
+<td>DB pool exhaustion shows up first</td>
+<td>Tune the pool and <code>max_connections</code>, or add PgBouncer, before adding pods</td>
+</tr>
+<tr>
+<td class="nw">EC-46.2</td>
+<td>Hot rows (same team match updated by both captains)</td>
+<td>Check lock waits in traces; the rule functions must keep transactions short</td>
+</tr>
+<tr>
+<td class="nw">EC-46.3</td>
+<td>Rate limiter trips the test</td>
+<td>Test users get a higher bucket via a staging-only config</td>
+</tr>
+</tbody></table></div>
+<h3 id="f46-acceptance-criteria"><span class="secnum">19.13.5</span> Acceptance criteria</h3>
+<ul>
+<li><strong>AC-46.1</strong> Given the league-night scenario on staging, then all thresholds pass and the report is attached to the release.</li>
+<li><strong>AC-46.2</strong> Given the 3 h soak, then memory per pod stays flat (± 10 %).</li>
+</ul>
+<h3 id="f46-open-questions"><span class="secnum">19.13.6</span> Open questions</h3>
+<ul>
+<li>What&#39;s the growth target: 200 concurrent nights, or more?</li>
+</ul>
+</section>
+
+</article>
+</main>
+<script src="../assets/site-data.js"></script>
+<script src="../assets/layout.js"></script>
+<script src="../assets/search-index.js"></script>
+<script src="../assets/site.js"></script>
+</body>
+</html>

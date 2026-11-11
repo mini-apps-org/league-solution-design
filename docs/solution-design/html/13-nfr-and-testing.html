@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>13 - Non-Functional Requirements and Test Strategy · MViP Solution Design</title>
+<link rel="stylesheet" href="assets/site.css">
+<script src="assets/boot.js"></script>
+</head>
+<body data-root="" data-page="13-nfr-and-testing.html">
+<main id="main" class="content">
+<article class="doc">
+<h1>13 - Non-Functional Requirements and Test Strategy</h1>
+
+<h2 id="1-non-functional-requirements"><span class="secnum">13.1</span> Non-functional requirements</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Category</th>
+<th>Requirement</th>
+<th>Measure</th>
+<th>Phase</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">NFR-01</td>
+<td>Performance</td>
+<td>API response for MVP reads/writes from Vietnam</td>
+<td>p95 &lt; 300 ms</td>
+<td>1</td>
+</tr>
+<tr>
+<td class="nw">NFR-02</td>
+<td>Performance</td>
+<td>Schedule / night page load on 4G</td>
+<td>LCP &lt; 2.5 s</td>
+<td>1</td>
+</tr>
+<tr>
+<td class="nw">NFR-03</td>
+<td>Correctness</td>
+<td>Points, race, cap and stats are computed <strong>only</strong> by Postgres functions</td>
+<td>Server value always wins over the TS preview</td>
+<td>1</td>
+</tr>
+<tr>
+<td class="nw">NFR-04</td>
+<td>Concurrency</td>
+<td>Two captains acting on one night at the same time</td>
+<td>Server re-checks <code>can_put_up()</code>; no double put-up</td>
+<td>1</td>
+</tr>
+<tr>
+<td class="nw">NFR-05</td>
+<td>Availability</td>
+<td>League nights (Mon–Fri 18:00–24:00 ICT)</td>
+<td>99.5% (MVP) → 99.9% (Phase 2)</td>
+<td>1–2</td>
+</tr>
+<tr>
+<td class="nw">NFR-06</td>
+<td>Security</td>
+<td>Session cookies + CSRF; OWASP ASVS L2 baseline; PDPD</td>
+<td>Pen-test before public launch</td>
+<td>1</td>
+</tr>
+<tr>
+<td class="nw">NFR-07</td>
+<td>Shared devices</td>
+<td>No signed-in HTML or API data cached by the service worker</td>
+<td>Verified by SW tests</td>
+<td>1</td>
+</tr>
+<tr>
+<td class="nw">NFR-08</td>
+<td>Usability</td>
+<td>Phone-first; 44 px tap targets; no hard-coded copy</td>
+<td>Lint and review</td>
+<td>1</td>
+</tr>
+<tr>
+<td class="nw">NFR-09</td>
+<td>Localization</td>
+<td>en + vi; vi must contain every en key</td>
+<td>Typecheck-enforced</td>
+<td>1</td>
+</tr>
+<tr>
+<td class="nw">NFR-10</td>
+<td>Auditability</td>
+<td>Every SL change has a reason, author and time</td>
+<td><code>skill_level_history</code></td>
+<td>1</td>
+</tr>
+<tr>
+<td class="nw">NFR-11</td>
+<td>Live scoring latency</td>
+<td>Tap → local UI &lt; 50 ms; server round-trip p95 &lt; 200 ms</td>
+<td></td>
+<td>2</td>
+</tr>
+<tr>
+<td class="nw">NFR-12</td>
+<td>Offline</td>
+<td>A full individual match can be scored offline and synced without loss</td>
+<td></td>
+<td>2</td>
+</tr>
+<tr>
+<td class="nw">NFR-13</td>
+<td>Scale</td>
+<td>200 concurrent team matches; 5k WebSocket viewers</td>
+<td>k6</td>
+<td>2</td>
+</tr>
+</tbody></table></div>
+<h2 id="2-test-strategy"><span class="secnum">13.2</span> Test strategy</h2>
+<figure class="diagram"><a class="diagram-img" href="assets/diagrams/13-nfr-and-testing-1.svg" target="_blank" aria-label="Open diagram full screen"><img src="assets/diagrams/13-nfr-and-testing-1.svg" alt="Diagram: 13 - Non-Functional Requirements and Test Strategy" loading="lazy" data-diagram-file="13-nfr-and-testing-1.svg" width="542" height="806"></a><figcaption><span></span><a class="full" href="assets/diagrams/13-nfr-and-testing-1.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="21-rule-tests-single-source--postgres"><span class="secnum">13.2.1</span> Rule tests (single source = Postgres)</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Suite</th>
+<th>Where</th>
+<th>Cases</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Race chart</td>
+<td>SQL test + <code>rules.test.ts</code></td>
+<td>All 36 pairs; mirror symmetry; SL6v4 = 5/3</td>
+</tr>
+<tr>
+<td>Points (<code>fn_score_individual_match</code>)</td>
+<td>SQL</td>
+<td>3–0 → 3/0; 4–3 both race 4 → 2/1 (hill); 4–1 loser race 3 → 2/0; 5–2 both race 5 → 2/0; games &gt; race raises; both at race raises; loser race 2 with 1 game → 2/1</td>
+</tr>
+<tr>
+<td>Snapshot (<code>fn_snapshot_put_up</code>)</td>
+<td>SQL</td>
+<td>Fires once both sides are up; never overwrites; an SL change afterwards leaves the snapshot</td>
+</tr>
+<tr>
+<td>Roll-up</td>
+<td>SQL</td>
+<td>Night totals equal the sum of 5 rows after insert, update and delete</td>
+</tr>
+<tr>
+<td><code>put_up_block_reason</code></td>
+<td>SQL</td>
+<td><code>would_break_23</code> (reads <code>skill_level_cap</code>), <code>already_put_up</code>, <code>not_on_roster</code>, <code>side_complete</code>; <code>can_put_up</code> agrees on every row</td>
+</tr>
+<tr>
+<td><code>change_skill_level</code></td>
+<td>SQL</td>
+<td>Rejects SL outside 2..7, a blank reason, an unknown player, a no-op; writes history with <code>changed_by</code></td>
+</tr>
+<tr>
+<td>Stats</td>
+<td>SQL</td>
+<td><code>players_stats</code> recompute; <code>player_division_stats</code> shows zeros for unplayed players; <code>team_standings</code> counts only <code>submitted</code></td>
+</tr>
+<tr>
+<td>Mirror drift</td>
+<td>Vitest</td>
+<td><code>_parked/src/lib/rules.ts</code> race chart and <code>pointsFor</code> equal the SQL cases above</td>
+</tr>
+</tbody></table></div>
+<h3 id="22-backend"><span class="secnum">13.2.2</span> Backend</h3>
+<ul>
+<li><code>go test -race ./...</code> in CI (<span class="badge b-built">Built</span>).</li>
+<li><span class="badge b-planned">Planned</span><code>internal/league</code> integration test with <code>LEAGUE_TEST_DATABASE_URL</code>, covering:<ul>
+<li>Reference data and joins.</li>
+<li>Put-up twice refused.</li>
+<li>Shutout rolls up to 3.</li>
+<li>Submit of an incomplete night refused.</li>
+<li>A player-role user gets 403 on writes.</li>
+<li>A captain of another team gets 403.</li>
+<li><code>LIKE</code> input <code>100%</code> matched literally.</li>
+</ul>
+</li>
+<li>Cookie/CSRF tests (<span class="badge b-built">Built</span><code>handlers_cookie_test.go</code>).</li>
+</ul>
+<h3 id="23-frontend"><span class="secnum">13.2.3</span> Frontend</h3>
+<ul>
+<li>Vitest + Testing Library + <strong>MSW only</strong> (never <code>vi.mock</code> the API); unhandled requests fail.</li>
+<li><span class="badge b-built">Built</span> Coverage: <code>RequireAuth</code>, <code>OnboardingPage</code>, <code>lib/errors</code>, <code>lib/member-id</code>.</li>
+<li>When restoring parked screens: put-up block reasons, result steppers capped at race, verdict preview, submit drawer, admin SL change (reason required).</li>
+</ul>
+<h3 id="24-end-to-end-"><span class="secnum">13.2.4</span> End-to-end (<span class="badge b-target">Target</span>)</h3>
+<p>Playwright is not installed (it needs approval). The first scenario to automate:</p>
+<ol>
+<li>Admin and captain users are seeded.</li>
+<li>The captain signs in and opens the week-10 fixture.</li>
+<li>The captain puts up 5 players; the cap block appears for 03209.</li>
+<li>The captain enters 5 results and submits.</li>
+<li>Standings and roster MW/MP update.</li>
+<li>A player-role user can view but not act.</li>
+</ol>
+<h3 id="25-integration-gate-before-beta"><span class="secnum">13.2.5</span> Integration gate before beta</h3>
+<p>The FE and BE have <strong>never been run together in a browser</strong> (plan.md status). Before the beta:</p>
+<ol>
+<li>Run them together locally and in production.</li>
+<li>Check the CORS preflight is absent on GETs.</li>
+<li>Check cookie scoping across <code>www.</code> and <code>be.</code>.</li>
+<li>Check logout sends <code>X-CSRF-Token</code>.</li>
+</ol>
+<h2 id="3-definition-of-done"><span class="secnum">13.3</span> Definition of Done</h2>
+<ul>
+<li>Rule changes are made in SQL <strong>and</strong> in the <code>rules.ts</code> mirror in the same change set, with tests on both sides.</li>
+<li>Swagger is regenerated (<code>make swagger</code>) and the FE types are updated.</li>
+<li>New error codes are added to the BE registry, the FE <code>ERROR_CODE</code> list and both locales; shipped codes are never renumbered.</li>
+<li>vi/en strings are added; no hard-coded copy.</li>
+<li>Repo conventions pass: BE <code>database.md</code> rules, FE lint (zero warnings), typecheck, tests.</li>
+<li>Privileged actions are recorded (SL history now; <code>audit_log</code> in Phase 2).</li>
+</ul>
+
+</article>
+</main>
+<script src="assets/site-data.js"></script>
+<script src="assets/layout.js"></script>
+<script src="assets/search-index.js"></script>
+<script src="assets/site.js"></script>
+</body>
+</html>

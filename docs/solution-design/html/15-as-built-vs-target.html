@@ -1,0 +1,393 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>27 - As-Built vs Target (Gap Analysis) · MViP Solution Design</title>
+<link rel="stylesheet" href="assets/site.css">
+<script src="assets/boot.js"></script>
+</head>
+<body data-root="" data-page="15-as-built-vs-target.html">
+<main id="main" class="content">
+<article class="doc">
+<h1>27 - As-Built vs Target (Gap Analysis)</h1>
+
+<p>Snapshot taken 2026-11-10 from <code>league-be@444af15</code> (tag 0.2.10) and <code>league-fe@fc5bf84</code> (tag 0.1.4).</p>
+<blockquote class="callout-warn"><h2 id="-p0-the-league-module-is-missing-from-league-be"><span class="secnum">27.1</span> P0: the league module is missing from league-be</h2>
+<p>The FE plans (<code>plan-1</code>, <code>plan-2</code>, <code>plan-3</code>) record these as <strong>&quot;done and verified&quot; on 2026-11-06/07</strong>:</p>
+<ul>
+<li><code>team_rosters</code> and the status CHECKs.</li>
+<li><code>00002_business_rules.sql</code> (476 lines of triggers, functions and views).</li>
+<li>The seed fixes and the <code>make migrate</code>/<code>make seed</code> targets.</li>
+<li><code>internal/league</code> with 13 endpoints.</li>
+<li><code>role</code> and <code>playerId</code> on <code>/me</code>.</li>
+</ul>
+<p><strong>None of it is in league-be:</strong> not on <code>master</code>, not on any remote branch, not in git history, and not in a stash. The FE notes mention <code>stash@{0}</code>, but no stash exists.</p>
+<p>Consequences:</p>
+<ul>
+<li>The committed seed fails (it inserts into <code>team_rosters</code>).</li>
+<li>The FE can&#39;t leave onboarding (<code>/members/preview</code> and <code>/me/link</code> don&#39;t exist).</li>
+<li>All league screens stay parked.</li>
+</ul>
+<p><strong>Action:</strong> check the other developer machines for uncommitted work first. If it isn&#39;t found, rebuild from plan-1/2/3, which describe every function and test case in enough detail. Commit in small PRs: schema → rules → seed → API → <code>/me</code>.</p>
+</blockquote>
+<h2 id="1-gap-matrix"><span class="secnum">27.1</span> Gap matrix</h2>
+<p>Priority: <strong>P0</strong> blocks the MVP · <strong>P1</strong> needed before beta · <strong>P2</strong> Phase 2 · <strong>P3</strong> later.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Area</th>
+<th>As-built (<span class="badge b-built">Built</span>)</th>
+<th>Planned (<span class="badge b-planned">Planned</span>)</th>
+<th>Target (<span class="badge b-target">Target</span>)</th>
+<th>Gap / next action</th>
+<th>Prio</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Schema</td>
+<td><code>00001_init.sql</code>: league tables, RBAC, race chart</td>
+<td><code>team_rosters</code>, CHECKs (plan-1)</td>
+<td>Per-format SL, racks, events, fees… (<a href="06-data-model.html#c--target-additions-later-phases">06 §C</a>)</td>
+<td>Restore plan-1 changes</td>
+<td class="nw">P0</td>
+</tr>
+<tr>
+<td>Business rules</td>
+<td>—</td>
+<td><code>00002</code>: snapshot, score, roll-up, stats triggers; <code>can_put_up</code>, <code>change_skill_level</code>; views</td>
+<td>Same; revisit for live scoring</td>
+<td>Restore <code>00002</code></td>
+<td class="nw">P0</td>
+</tr>
+<tr>
+<td>Seed</td>
+<td><code>seeds/20261106_seed.sql</code> (broken)</td>
+<td>Works after <code>team_rosters</code> exists</td>
+<td>—</td>
+<td>Restore with the schema</td>
+<td class="nw">P0</td>
+</tr>
+<tr>
+<td>Migration runner</td>
+<td>Manual <code>psql</code></td>
+<td><code>make migrate</code>, <code>make seed</code></td>
+<td><code>golang-migrate</code>/<code>goose</code> + k8s Job</td>
+<td>Add the Makefile targets now, the tool later</td>
+<td>P0 / P1</td>
+</tr>
+<tr>
+<td>League API</td>
+<td>—</td>
+<td>13 endpoints + <code>/teams</code> (<code>internal/league</code>)</td>
+<td>+ standings, stats, Phase 2 scoring</td>
+<td>Rebuild per plan-3</td>
+<td class="nw">P0</td>
+</tr>
+<tr>
+<td><code>/me</code></td>
+<td><code>{id,email,name,avatarUrl}</code></td>
+<td>+ <code>role</code>, <code>playerId</code></td>
+<td>—</td>
+<td>Add with the role resolver</td>
+<td class="nw">P0</td>
+</tr>
+<tr>
+<td>Onboarding API</td>
+<td>—</td>
+<td><code>GET /members/preview</code>, <code>POST /me/link</code></td>
+<td>Rate limit + minimal disclosure</td>
+<td>Build, and decide <a href="14-open-questions.html">Q31</a></td>
+<td class="nw">P0</td>
+</tr>
+<tr>
+<td>Authorization</td>
+<td>RBAC tables only, no checks</td>
+<td>Role middleware + captain-owns-night helper</td>
+<td>Scoped LO/Rep roles</td>
+<td>Build with <code>internal/league</code></td>
+<td class="nw">P0</td>
+</tr>
+<tr>
+<td>Auth</td>
+<td>Google OIDC + PKCE, cookie sessions, CSRF</td>
+<td>—</td>
+<td>Zalo login (Phase 2)</td>
+<td>Publish the Google consent screen (it&#39;s in Testing mode)</td>
+<td class="nw">P1</td>
+</tr>
+<tr>
+<td>FE screens</td>
+<td>Login, onboarding UI, placeholders</td>
+<td>Schedule, night, put-up, result, submit, admin (parked)</td>
+<td>Profile, standings, live scoring</td>
+<td>Un-park per <code>RESTORE.md</code> once the API exists</td>
+<td class="nw">P0</td>
+</tr>
+<tr>
+<td>FE API types</td>
+<td>Hand-written <code>types/league.ts</code></td>
+<td><code>openapi-typescript</code> from swagger</td>
+<td>—</td>
+<td>Generate after the swagger is regenerated</td>
+<td class="nw">P1</td>
+</tr>
+<tr>
+<td>FE ↔ BE integration</td>
+<td>Never run together in a browser</td>
+<td>—</td>
+<td>—</td>
+<td>Joint test: CORS, cookies across <code>www.</code>/<code>be.</code>, CSRF</td>
+<td class="nw">P1</td>
+</tr>
+<tr>
+<td>Swagger</td>
+<td>5 paths; user <code>id</code> shown as integer</td>
+<td>18 paths</td>
+<td>OpenAPI 3 for codegen</td>
+<td>Regenerate; fix the id type</td>
+<td class="nw">P1</td>
+</tr>
+<tr>
+<td>BE deployment</td>
+<td>Image pushed to Artifact Registry on tag</td>
+<td>—</td>
+<td>GKE manifests, deploy job, Cloud SQL, Secret Manager</td>
+<td>Write the manifests + deploy job (<a href="12-infra-devops.html#4--target-runtime-on-gcp">12 §4</a>)</td>
+<td class="nw">P1</td>
+</tr>
+<tr>
+<td>Port</td>
+<td>Dockerfile 9200, YAML staging/prod 5001</td>
+<td>—</td>
+<td>One value</td>
+<td>Align them, or set <code>PORT</code> in the manifest</td>
+<td class="nw">P1</td>
+</tr>
+<tr>
+<td>Staging</td>
+<td><code>staging.yaml</code> = <code>production.yaml</code></td>
+<td>—</td>
+<td>Separate hosts and OAuth client</td>
+<td>Create a staging environment</td>
+<td class="nw">P1</td>
+</tr>
+<tr>
+<td>Health</td>
+<td>Liveness only (<code>/api/v1/health</code>)</td>
+<td>—</td>
+<td><code>/readyz</code> with a DB ping</td>
+<td>Add before GKE probes</td>
+<td class="nw">P1</td>
+</tr>
+<tr>
+<td>Rate limiting</td>
+<td>Code <code>42901</code> only</td>
+<td>—</td>
+<td>Redis bucket + Cloudflare rules</td>
+<td>Cloudflare rules first (no code)</td>
+<td class="nw">P1</td>
+</tr>
+<tr>
+<td>Logging</td>
+<td>stdlib <code>log</code>, YAML logger block unused</td>
+<td>—</td>
+<td><code>slog</code> JSON + request ID</td>
+<td>Add with the deploy work</td>
+<td class="nw">P1</td>
+</tr>
+<tr>
+<td>Config hygiene</td>
+<td>Unused <code>server</code>, <code>logger</code>, <code>domains.*</code> YAML; <code>BASE_URL</code> unused; <code>FRONTEND_URL</code> stale in <code>.env.example</code></td>
+<td>—</td>
+<td>—</td>
+<td>Clean up</td>
+<td class="nw">P2</td>
+</tr>
+<tr>
+<td>Pagination</td>
+<td>Cursor encodes an int64 id</td>
+<td>—</td>
+<td>UUID / <code>(created_at,id)</code> cursor</td>
+<td>Fix before the first paginated league list</td>
+<td class="nw">P1</td>
+</tr>
+<tr>
+<td>PWA / offline</td>
+<td>Static cache only, never HTML/API</td>
+<td>—</td>
+<td>IndexedDB queue for live scoring</td>
+<td>Phase 2</td>
+<td class="nw">P2</td>
+</tr>
+<tr>
+<td>Live scoring</td>
+<td>—</td>
+<td>Out of MVP scope</td>
+<td>Event-sourced engine + Redis + WS (<a href="08-scorekeeping-engine.html">08</a>)</td>
+<td>Phase 2 design spike: Postgres functions vs a Go engine</td>
+<td class="nw">P2</td>
+</tr>
+<tr>
+<td>Verification bonus</td>
+<td>—</td>
+<td>Captain submit only</td>
+<td>Dual-captain matching, disputes</td>
+<td>Phase 2</td>
+<td class="nw">P2</td>
+</tr>
+<tr>
+<td>9-Ball</td>
+<td>—</td>
+<td>—</td>
+<td>Per-format SL, ball scoring</td>
+<td>Phase 2</td>
+<td class="nw">P2</td>
+</tr>
+<tr>
+<td>IDs</td>
+<td><code>member_id</code> TEXT (8 digits assumed), <code>team_number</code> APA-style (<code>03209</code>)</td>
+<td>—</td>
+<td>Generated <code>YYMMNNNN</code> / <code>RRVVT</code></td>
+<td>Decide <a href="14-open-questions.html">Q2/Q3</a></td>
+<td class="nw">P2</td>
+</tr>
+<tr>
+<td>Roster rule</td>
+<td>One active roster per player (planned index)</td>
+<td>—</td>
+<td>One per division (R-011)</td>
+<td>Change the index when multi-division lands (<a href="14-open-questions.html">Q32</a>)</td>
+<td class="nw">P2</td>
+</tr>
+<tr>
+<td>Audit</td>
+<td><code>skill_level_history</code> only</td>
+<td>—</td>
+<td><code>audit_log</code></td>
+<td>Phase 2</td>
+<td class="nw">P2</td>
+</tr>
+<tr>
+<td>Payments</td>
+<td><code>players.is_paid</code> flag</td>
+<td>—</td>
+<td>Fees + MoMo/ZaloPay</td>
+<td>Phase 2</td>
+<td class="nw">P2</td>
+</tr>
+<tr>
+<td>Observability</td>
+<td>—</td>
+<td>—</td>
+<td>Metrics, tracing, Sentry</td>
+<td>With GKE</td>
+<td class="nw">P2</td>
+</tr>
+<tr>
+<td>E2E tests</td>
+<td>—</td>
+<td>—</td>
+<td>Playwright two-captain night</td>
+<td>Needs dependency approval</td>
+<td class="nw">P2</td>
+</tr>
+<tr>
+<td>Docs drift</td>
+<td><code>__Host-csrf</code> in FE <code>CLAUDE.md</code>/README; stale auth README (paths, JWT, <code>hd</code> check, missing test); CLAUDE.md path <code>.claude/database.md</code>; stale <code>next</code>-path comment</td>
+<td>—</td>
+<td>—</td>
+<td>Fix in both repos (<a href="14-open-questions.html">Q35</a>)</td>
+<td class="nw">P1</td>
+</tr>
+</tbody></table></div>
+<h2 id="2-where-the-original-design-changed"><span class="secnum">27.2</span> Where the original design changed</h2>
+<p>These are the choices from v0.1 of this design that the repos replaced. The rest of the design now follows the repos.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Topic</th>
+<th>Design v0.1</th>
+<th>Repo decision (now the design)</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Go framework</td>
+<td>Gin</td>
+<td><code>net/http</code> + gorilla/mux</td>
+</tr>
+<tr>
+<td>DB access</td>
+<td>sqlc + golang-migrate</td>
+<td>Raw pgx with the <code>args []any</code> convention; no migration tool yet</td>
+</tr>
+<tr>
+<td>Auth</td>
+<td>Zalo OAuth / phone OTP + JWT access/refresh</td>
+<td>Google OIDC + PKCE + opaque cookie sessions + CSRF</td>
+</tr>
+<tr>
+<td>Business rules</td>
+<td>Pure Go <code>pkg/rules</code> shared with TS</td>
+<td>Postgres triggers/functions; TS mirror for preview only</td>
+</tr>
+<tr>
+<td>Phase 1 scoring</td>
+<td>Event-sourced live scoring, offline, verification</td>
+<td>Per-match result entry + captain submit</td>
+</tr>
+<tr>
+<td>Put-up order</td>
+<td>Coin flip</td>
+<td>Home first on odd matches (coin flip in Phase 2)</td>
+</tr>
+<tr>
+<td>FE repo</td>
+<td>pnpm + Turborepo monorepo (player/admin/public apps)</td>
+<td>Single Vite app with role-gated admin routes</td>
+</tr>
+<tr>
+<td>FE state</td>
+<td>Zustand for live scoring</td>
+<td>React Query only; a store needs approval in Phase 2</td>
+</tr>
+<tr>
+<td>i18n default</td>
+<td>Vietnamese</td>
+<td>English (vi available)</td>
+</tr>
+<tr>
+<td>IDs</td>
+<td>UUIDv7</td>
+<td>UUID v4; TEXT for users/sessions</td>
+</tr>
+<tr>
+<td>Domains</td>
+<td><code>mvip.vn</code></td>
+<td><code>mvip-league.com</code> (<code>www.</code>, <code>be.</code>)</td>
+</tr>
+<tr>
+<td>Errors</td>
+<td>RFC 9457 problem+json</td>
+<td><code>{error:{code,message}}</code> with 5-digit codes</td>
+</tr>
+<tr>
+<td>Envelope</td>
+<td>Bare JSON</td>
+<td><code>{session_id, count, data, metadata}</code></td>
+</tr>
+<tr>
+<td>Deploy</td>
+<td>GitHub Actions → GKE (Helm)</td>
+<td>Tag → Artifact Registry; GKE deploy not built yet</td>
+</tr>
+</tbody></table></div>
+
+</article>
+</main>
+<script src="assets/site-data.js"></script>
+<script src="assets/layout.js"></script>
+<script src="assets/search-index.js"></script>
+<script src="assets/site.js"></script>
+</body>
+</html>

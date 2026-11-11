@@ -1,0 +1,339 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>10 - Backend Design (league-be) · MViP Solution Design</title>
+<link rel="stylesheet" href="assets/site.css">
+<script src="assets/boot.js"></script>
+</head>
+<body data-root="" data-page="10-backend-design.html">
+<main id="main" class="content">
+<article class="doc">
+<h1>10 - Backend Design (league-be)</h1>
+
+<p>Repo: <code>league-be</code> (GitHub <code>mini-apps-org/league-be</code>), module <code>github.com/nguyentanvinh/league-be</code>. Tags 0.1.0–0.2.10.</p>
+<blockquote>
+<p><span class="badge b-built">Built</span> as-built · <span class="badge b-planned">Planned</span> MVP (plan-2/plan-3, not in the repo) · <span class="badge b-target">Target</span></p>
+</blockquote>
+<h2 id="1-stack-"><span class="secnum">10.1</span> Stack (<span class="badge b-built">Built</span>)</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Concern</th>
+<th>Choice</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Language</td>
+<td><strong>Go 1.26</strong></td>
+<td><code>go.mod</code></td>
+</tr>
+<tr>
+<td>HTTP</td>
+<td>Standard <code>net/http</code> + <strong>gorilla/mux 1.8</strong></td>
+<td>Subrouters per area</td>
+</tr>
+<tr>
+<td>DB</td>
+<td><strong>pgx/v5 <code>pgxpool</code>, raw SQL</strong></td>
+<td><code>pgx.CollectOneRow</code> + <code>RowToStructByName</code>. No ORM, no sqlc</td>
+</tr>
+<tr>
+<td>Auth</td>
+<td><code>coreos/go-oidc/v3</code> + <code>golang.org/x/oauth2</code></td>
+<td>Google OIDC, PKCE</td>
+</tr>
+<tr>
+<td>CORS</td>
+<td><code>rs/cors</code></td>
+<td>Single origin</td>
+</tr>
+<tr>
+<td>Config</td>
+<td><code>spf13/viper</code>, embedded YAML per env + env vars</td>
+<td><code>internal/platform/config</code></td>
+</tr>
+<tr>
+<td>API docs</td>
+<td><code>swaggo/swag</code> + <code>http-swagger</code></td>
+<td><code>make swagger</code></td>
+</tr>
+<tr>
+<td>Crypto</td>
+<td>stdlib AES-256-GCM</td>
+<td><code>internal/secret</code></td>
+</tr>
+<tr>
+<td>Logging</td>
+<td>stdlib <code>log</code></td>
+<td><span class="badge b-target">Target</span><code>log/slog</code> JSON + request ID</td>
+</tr>
+<tr>
+<td>Migrations</td>
+<td>Hand-applied numbered SQL</td>
+<td><span class="badge b-planned">Planned</span><code>make migrate</code> / <code>make seed</code></td>
+</tr>
+<tr>
+<td>Cache / realtime</td>
+<td>—</td>
+<td><span class="badge b-target">Target</span> Redis (Memorystore) for live scoring in Phase 2</td>
+</tr>
+</tbody></table></div>
+<h2 id="2-layout"><span class="secnum">10.2</span> Layout</h2>
+<div class="code"><span class="code-lang">text</span><button class="copy" type="button">Copy</button><pre><code class="lang-text">league-be/
+├─ cmd/server/main.go               # config → pgxpool → router → CORS → http.Server, graceful shutdown (10 s)
+├─ internal/
+│  ├─ auth/                         # built Google sign-in, sessions, cookies, RequireAuth
+│  │  ├─ handlers.go  handlers_cookie.go  middleware.go
+│  │  ├─ services.go  services_google.go  login_transaction.go  cleanup.go
+│  │  ├─ repositories.go  models.go  model_handlers.go  model_services.go
+│  │  └─ README.md  handlers_cookie_test.go
+│  ├─ league/                       # planned plan-3: models, model_handlers, repositories, services, handlers
+│  ├─ platform/
+│  │  ├─ config/   config.go model.go globals.go {development,staging,production}.yaml
+│  │  ├─ db/       db.go (pgxpool Connect)
+│  │  ├─ handler/  handlers.go (JSON helpers, DecodeJSON), error.go (code registry)
+│  │  ├─ middleware/ csrf.go security_headers.go
+│  │  ├─ model/    cursor.go model.go (keyset pagination)
+│  │  └─ router/   router.go auth.go health.go (planned league.go) router_test.go
+│  └─ secret/secret.go              # AES-256-GCM Box
+├─ db/migrations/00001_init.sql  seeds/20261106_seed.sql   (planned 00002_business_rules.sql)
+├─ docs/swagger/
+├─ Dockerfile  Makefile  .air.toml
+└─ .github/workflows/ci.yaml release.yaml</code></pre></div>
+<p>Dependency direction: <code>router → &lt;module&gt; → platform/{db,config,handler}</code>, and <code>auth → secret</code>.</p>
+<h2 id="3-layering-and-file-conventions"><span class="secnum">10.3</span> Layering and file conventions</h2>
+<div class="code"><span class="code-lang">text</span><button class="copy" type="button">Copy</button><pre><code class="lang-text">handlers.go      HTTP only: decode, validate, call service, encode envelope / APIError
+services.go      business decisions, authorization, transactions; maps repo sentinels → API codes
+repositories.go  SQL only; returns models or sentinels (ErrNoUser, ErrNoSession…)
+models.go        DB row structs
+model_handlers.go  JSON request/response shapes (camelCase)
+model_services.go  service-boundary types</code></pre></div>
+<p><code>Service</code>, <code>Repository</code> and <code>IdentityProvider</code> are interfaces, so they can be faked in tests. <code>*secret.Box</code> is concrete on purpose.</p>
+<h3 id="31-repository-rules-clauderulesdatabasemd"><span class="secnum">10.3.1</span> Repository rules (<code>.claude/rules/database.md</code>)</h3>
+<ol>
+<li><strong>Query shape.</strong> Each query function declares <code>const query</code>, then a named <code>args := []any{…}</code> with one argument per line in placeholder order, then calls with <code>args...</code>. This applies even with a single argument. With more than 2 arguments, annotate each with its <code>$n</code> and column.</li>
+<li><strong>Values are placeholders only.</strong> <code>fmt.Sprintf</code> may shape the query, never inject values. Dynamic filters use an <code>add(clause, value)</code> helper that numbers placeholders from <code>len(args)</code>. <code>LIKE</code> input escapes <code>\ % _</code>.</li>
+<li><strong>Errors</strong> are wrapped as <code>&quot;&lt;package&gt;: &lt;operation&gt;: %w&quot;</code>. Never log credentials or request bodies.</li>
+<li><strong>No rows.</strong> <code>pgx.ErrNoRows</code> becomes a package sentinel, and the service maps it to <code>40401</code>. Writes check <code>RowsAffected() == 0</code>.</li>
+<li><strong>Row mapping</strong> prefers <code>RowToStructByName</code>. Explicit <code>Scan</code> lists must match the column order.</li>
+<li><strong>Context.</strong> <code>ctx</code> is the first parameter. <code>context.Background()</code> is allowed only where there is no request (the cleanup sweep).</li>
+<li><strong>Lists</strong> are bounded with keyset paging (<code>WHERE id &gt; $1 ORDER BY id LIMIT $2</code>, fetching limit+1 as a lookahead) and call <code>model.CursorParams.Normalise()</code>.</li>
+<li><strong>Rows</strong> always get <code>defer rows.Close()</code> and a <code>rows.Err()</code> check. Start lists with <code>out := []T{}</code> so an empty result encodes <code>[]</code>, not <code>null</code>.</li>
+</ol>
+<p>Example in the house style:</p>
+<div class="code"><span class="code-lang">go</span><button class="copy" type="button">Copy</button><pre><code class="lang-go">func (r *repo) PlayerByMemberID(ctx context.Context, memberID string) (Player, error) {
+	const query = `
+		SELECT id, member_id, full_name, skill_level, is_paid
+		FROM players
+		WHERE member_id = $1`
+	args := []any{
+		memberID,
+	}
+	p, err := queryOne[Player](ctx, r.db, query, args...)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Player{}, ErrNoPlayer
+	}
+	if err != nil {
+		return Player{}, fmt.Errorf(&quot;league: player by member id: %w&quot;, err)
+	}
+	return p, nil
+}</code></pre></div>
+<h2 id="4-platform-services-"><span class="secnum">10.4</span> Platform services (<span class="badge b-built">Built</span>)</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Piece</th>
+<th>Behavior</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>handler.DecodeJSON</code></td>
+<td>1 MiB limit, <code>DisallowUnknownFields</code>, exactly one JSON object</td>
+</tr>
+<tr>
+<td><code>handler.Error(code, cause)</code></td>
+<td>Builds an <code>*APIError</code>. The log line has method, path, status, code, reason and cause; the client gets <code>{error:{code,message}}</code></td>
+</tr>
+<tr>
+<td><code>config.SuccessResponse</code></td>
+<td><code>{session_id, count, data, metadata}</code></td>
+</tr>
+<tr>
+<td><code>middleware.CSRF</code></td>
+<td>Double-submit check on unsafe methods for the whole <code>/api/v1</code> subrouter</td>
+</tr>
+<tr>
+<td><code>middleware.SecurityHeaders</code></td>
+<td><code>nosniff</code>, <code>X-Frame-Options: DENY</code>, <code>Referrer-Policy: no-referrer</code>, <code>COOP: same-origin</code>, CSP <code>default-src &#39;none&#39;; frame-ancestors &#39;none&#39;</code> (not on <code>/swagger/</code>), HSTS in production</td>
+</tr>
+<tr>
+<td><code>model.CursorParams</code></td>
+<td>Default 50, max 200, <code>base64url(&quot;p1:&quot;+id)</code></td>
+</tr>
+<tr>
+<td><code>secret.Box</code></td>
+<td><code>base64url(version ‖ nonce ‖ ciphertext)</code> with AAD domain separation; <code>ENCRYPTION_KEY_VERSION</code> 1..255. Seals <code>oauth_tx</code>. Planned to seal stored API keys</td>
+</tr>
+<tr>
+<td><code>auth.StartSessionCleanup</code></td>
+<td>Sweeps expired sessions at startup, then every 24 h</td>
+</tr>
+<tr>
+<td>Server timeouts</td>
+<td>Hardcoded in <code>main.go</code>: ReadHeader 10 s, Read 15 s, Write 90 s, Idle 120 s. The YAML <code>server</code> block is unused</td>
+</tr>
+</tbody></table></div>
+<h2 id="5-configuration"><span class="secnum">10.5</span> Configuration</h2>
+<p><code>config.Load()</code> reads the embedded <code>{APP_ENV}.yaml</code> (<code>development</code> by default), then applies environment variables.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Env var</th>
+<th>Meaning / default</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>APP_ENV</code></td>
+<td><code>development</code> | <code>staging</code> | <code>production</code>. Only <code>production</code> turns on Secure cookies, <code>__Host-</code>/<code>__Secure-</code> prefixes, cookie Domain and HSTS</td>
+</tr>
+<tr>
+<td><code>PORT</code></td>
+<td>Overrides YAML (dev 9200, staging/prod 5001; the Dockerfile exposes 9200)</td>
+</tr>
+<tr>
+<td><code>DATABASE_URL</code> or <code>DB_HOST</code> / <code>DB_PORT</code> / <code>DB_USER</code> / <code>DB_PASSWORD</code> / <code>DB_NAME</code> / <code>DB_SSLMODE</code></td>
+<td>Postgres</td>
+</tr>
+<tr>
+<td><code>GOOGLE_OAUTH_CLIENT_ID</code>, <code>GOOGLE_OAUTH_CLIENT_SECRET</code></td>
+<td>Required</td>
+</tr>
+<tr>
+<td><code>SESSION_TTL</code> (12h), <code>SESSION_IDLE_TTL</code> (30m)</td>
+<td>Startup fails if idle &gt; absolute</td>
+</tr>
+<tr>
+<td><code>ENCRYPTION_KEY</code> (base64, 32 bytes), <code>ENCRYPTION_KEY_VERSION</code> (1)</td>
+<td>Required for <code>secret.Box</code></td>
+</tr>
+<tr>
+<td><code>ENV_IMAGE</code></td>
+<td>Overrides the image tag stamped at build (shown by <code>/health</code>)</td>
+</tr>
+<tr>
+<td><code>BASE_URL</code>, <code>FRONTEND_URL</code></td>
+<td><span class="badge b-caution">Caution</span><code>BASE_URL</code> is read but unused. <code>FRONTEND_URL</code> is no longer read (replaced by YAML <code>app_base_url.frontend</code>) but is still in <code>.env.example</code> and the FE README</td>
+</tr>
+</tbody></table></div>
+<p>YAML-only values:</p>
+<ul>
+<li><code>auth.google_oauth_redirect_url</code>: <code>https://be.mvip-league.com/api/v1/auth/google/callback</code> in staging and prod.</li>
+<li><code>app_base_url.frontend</code>: <code>https://www.mvip-league.com</code>.</li>
+<li>DB pool: max 20 / min 4 in prod, 10 / 2 in dev.</li>
+</ul>
+<p><code>staging.yaml</code> and <code>production.yaml</code> are currently identical.</p>
+<h2 id="6--planned-internalleague-module-restore-per-plan-3"><span class="secnum">10.6</span> <span class="badge b-planned">Planned</span> <code>internal/league</code> module (restore per plan-3)</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>File</th>
+<th>Contents</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>models.go</code></td>
+<td>Row structs: Season, Division, TeamMatch, IndividualMatch, RosterPlayer, AvailablePlayer, Player, SkillLevelChange</td>
+</tr>
+<tr>
+<td><code>model_handlers.go</code></td>
+<td>camelCase request/response shapes (match <code>league-fe/src/types/league.ts</code>)</td>
+</tr>
+<tr>
+<td><code>repositories.go</code></td>
+<td>SQL over tables, the views <code>player_division_stats</code> and <code>team_standings</code>, and the functions <code>can_put_up()</code>, <code>put_up_block_reason()</code> and <code>change_skill_level()</code></td>
+</tr>
+<tr>
+<td><code>services.go</code></td>
+<td>Role checks; the <strong>captain-owns-this-night</strong> helper; mapping <code>PUT_UP_REJECTED</code>/<code>UNPAID_MEMBER</code>; submit-only-when-complete</td>
+</tr>
+<tr>
+<td><code>handlers.go</code> + <code>router/league.go</code></td>
+<td>The 13 routes in <a href="07-api-design.html#2-resource-map">07 §2</a>, with <code>RequireAuth</code> + a role middleware per route</td>
+</tr>
+<tr>
+<td><code>league_integration_test.go</code></td>
+<td>Runs against a seeded DB (<code>LEAGUE_TEST_DATABASE_URL</code>)</td>
+</tr>
+</tbody></table></div>
+<p>The <code>/me</code> update adds <code>role</code> (ADMIN &gt; CAPTAIN &gt; PLAYER precedence from <code>users_roles</code>; no row → PLAYER) and <code>playerId</code>.</p>
+<p><strong>The business rules are not in Go.</strong> Services call the Postgres functions and trust the trigger results (decision ADR-004). Go only enforces <em>who</em> may act, not <em>what</em> the score is.</p>
+<h2 id="7--phase-2-additions"><span class="secnum">10.7</span> <span class="badge b-target">Target</span> Phase 2 additions</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Addition</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>internal/scoring</code> + Redis</td>
+<td>Event log, lease, live snapshot, pub/sub, WebSocket hub (<a href="08-scorekeeping-engine.html">08</a>). Scoring still finishes in the Postgres functions, or moves to a pure Go engine shared with TS if live scoring needs per-event validation (ADR-004 revisit)</td>
+</tr>
+<tr>
+<td>Outbox table + worker (<code>cmd/worker</code>)</td>
+<td>Notifications, fees, SL suggestions after submit</td>
+</tr>
+<tr>
+<td><code>log/slog</code> JSON + request ID middleware</td>
+<td><code>ContextKeyRequestID</code> already exists but is unused</td>
+</tr>
+<tr>
+<td>Rate limiter (<code>42901</code>)</td>
+<td>Redis token bucket</td>
+</tr>
+<tr>
+<td><code>/readyz</code> with a DB ping</td>
+<td>Today <code>/health</code> is liveness only</td>
+</tr>
+<tr>
+<td>Migration runner</td>
+<td><code>golang-migrate</code> or <code>goose</code>, run as a k8s Job before rollout</td>
+</tr>
+</tbody></table></div>
+<h2 id="8-testing---"><span class="secnum">10.8</span> Testing (<span class="badge b-built">Built</span>/ <span class="badge b-planned">Planned</span>)</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Level</th>
+<th>Today</th>
+<th>Target</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Unit</td>
+<td><code>handlers_cookie_test.go</code> (cookie names, prefixes, paths, domain, CSRF read), <code>config/model_test.go</code>, <code>router/router_test.go</code></td>
+<td>Service tests with fake repositories</td>
+</tr>
+<tr>
+<td>SQL rules</td>
+<td>—</td>
+<td><span class="badge b-planned">Planned</span> Integration test against a seeded Postgres: snapshot, points (3/0, 2/1, 2/0), roll-up, <code>can_put_up</code> reasons, <code>change_skill_level</code>, stats</td>
+</tr>
+<tr>
+<td>CI</td>
+<td>golangci-lint, <code>gofmt</code> check, <code>go test -race ./...</code>, <code>go build ./...</code></td>
+<td>Add <code>govulncheck</code>, swagger drift check</td>
+</tr>
+</tbody></table></div>
+
+</article>
+</main>
+<script src="assets/site-data.js"></script>
+<script src="assets/layout.js"></script>
+<script src="assets/search-index.js"></script>
+<script src="assets/site.js"></script>
+</body>
+</html>

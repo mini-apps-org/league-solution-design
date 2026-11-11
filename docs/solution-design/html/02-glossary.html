@@ -1,0 +1,322 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>02 - Glossary · MViP Solution Design</title>
+<link rel="stylesheet" href="assets/site.css">
+<script src="assets/boot.js"></script>
+</head>
+<body data-root="" data-page="02-glossary.html">
+<main id="main" class="content">
+<article class="doc">
+<h1>02 - Glossary</h1>
+
+<p>Use these exact terms in code, UI copy, and tickets. The last column gives the <strong>identifier used in the repos</strong> (DB column / JSON field). <span class="badge b-target">Target</span> marks identifiers for Phase 2 features that aren&#39;t built yet.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Term</th>
+<th>Vietnamese</th>
+<th>Definition</th>
+<th>Format</th>
+<th>Code identifier</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>SL</strong> — Skill Level</td>
+<td>Hạng</td>
+<td>Player handicap. 8-Ball SL 2–7, 9-Ball SL 1–9. Determines race / target</td>
+<td>All</td>
+<td>DB <code>skill_level</code>, JSON <code>skillLevel</code>; snapshot <code>home_skill_level</code></td>
+</tr>
+<tr>
+<td><strong>Race</strong> / GW/GN</td>
+<td>—</td>
+<td>Games Won / Games Needed (8-Ball), e.g. <code>4/4 – 1/4</code></td>
+<td>8B</td>
+<td>DB <code>home_games</code> / <code>home_race</code>, JSON <code>homeGames</code> / <code>homeRace</code></td>
+</tr>
+<tr>
+<td><strong>Target points</strong></td>
+<td>—</td>
+<td>Points a 9-Ball player must reach (14…75)</td>
+<td>9B</td>
+<td><code>needed</code></td>
+</tr>
+<tr>
+<td><strong>Lag</strong></td>
+<td>Giành quyền phá bi</td>
+<td>Preliminary shot to decide who breaks; winner chooses breaker</td>
+<td>8B, 9B</td>
+<td><code>lagWinner</code></td>
+</tr>
+<tr>
+<td><strong>Break</strong></td>
+<td>Phá bi</td>
+<td>Opening shot of a rack</td>
+<td>All</td>
+<td><code>breaker</code></td>
+</tr>
+<tr>
+<td><strong>Inning</strong></td>
+<td>Lượt</td>
+<td>One turn for each player; counted when the player who lost the lag ends a turn. MVP stores the match total</td>
+<td>All</td>
+<td><code>innings</code></td>
+</tr>
+<tr>
+<td><strong>Turn Over</strong></td>
+<td>Hết lượt</td>
+<td>Shooter&#39;s turn ends without a legal pocket</td>
+<td>All</td>
+<td><code>TURN_OVER</code></td>
+</tr>
+<tr>
+<td><strong>DS</strong> — Defensive Shot</td>
+<td>Đánh phòng thủ</td>
+<td>Shot with no intent to pocket a ball (safety)</td>
+<td>All</td>
+<td>DB <code>home_def_shots</code>, JSON <code>homeDefShots</code>; <span class="badge b-target">Target</span> event <code>DEFENSIVE_SHOT</code></td>
+</tr>
+<tr>
+<td><strong>Time-out</strong></td>
+<td>Hội ý</td>
+<td>Coaching pause; limited per rack by SL</td>
+<td>All</td>
+<td><code>TIMEOUT</code></td>
+</tr>
+<tr>
+<td><strong>BR</strong> — Break and Run</td>
+<td>Đi chấm!</td>
+<td>Breaker clears the rack without the opponent shooting</td>
+<td>8B, 9B</td>
+<td><code>BREAK_AND_RUN</code></td>
+</tr>
+<tr>
+<td><strong>8OB</strong> — 8 on the Break</td>
+<td>Đề pa Chết 8</td>
+<td>Golden break: 8 pocketed legally on break = instant win</td>
+<td>8B</td>
+<td><code>EIGHT_ON_BREAK</code></td>
+</tr>
+<tr>
+<td><strong>9OB</strong> — 9 on the Break</td>
+<td>Đề pa Chết 9</td>
+<td>Golden break: 9 pocketed legally on break</td>
+<td>9B</td>
+<td><code>NINE_ON_BREAK</code></td>
+</tr>
+<tr>
+<td><strong>E8</strong> — Early 8</td>
+<td>Chết 8 Sớm</td>
+<td>8 pocketed before own group is cleared → loss</td>
+<td>8B</td>
+<td><code>EARLY_8</code></td>
+</tr>
+<tr>
+<td><strong>S8</strong> — Scratch on 8</td>
+<td>Chết 8</td>
+<td>8 and cue ball both pocketed → loss</td>
+<td>8B</td>
+<td><code>SCRATCH_8</code></td>
+</tr>
+<tr>
+<td><strong>8WP</strong> — 8 Wrong Pocket</td>
+<td>Chết 8 Sai Lỗ</td>
+<td>8 pocketed into an un-called pocket → loss</td>
+<td>8B</td>
+<td><code>WRONG_POCKET_8</code></td>
+</tr>
+<tr>
+<td><strong>DB</strong> — Dead Ball</td>
+<td>Bi chết</td>
+<td>Ball pocketed on a foul; credited to nobody. The 9 is never dead (re-spotted)</td>
+<td>9B</td>
+<td><code>DEAD_BALL</code></td>
+</tr>
+<tr>
+<td><strong>Hill</strong></td>
+<td>Đứng &quot;hill&quot;</td>
+<td>One game short of the race</td>
+<td>8B</td>
+<td><code>onHill</code></td>
+</tr>
+<tr>
+<td><strong>Hill-Hill</strong></td>
+<td>—</td>
+<td>Both players one game short</td>
+<td>8B</td>
+<td>—</td>
+</tr>
+<tr>
+<td><strong>Shutout</strong></td>
+<td>—</td>
+<td>Winner wins without the loser winning any game → 3-0</td>
+<td>8B</td>
+<td>—</td>
+</tr>
+<tr>
+<td><strong>Rackless</strong></td>
+<td>—</td>
+<td>Won the lag and the match without losing a rack</td>
+<td>8B</td>
+<td><code>RACKLESS</code></td>
+</tr>
+<tr>
+<td><strong>Double-strike</strong></td>
+<td>Cú Đúp</td>
+<td>BR + golden break on the same night (MViP&#39;s version of APA &quot;mini-slam&quot;)</td>
+<td>All</td>
+<td><code>DOUBLE_STRIKE</code></td>
+</tr>
+<tr>
+<td><strong>PA</strong> — Points Available</td>
+<td>—</td>
+<td>Max team points per match: 3 (8B), 20 (9B)</td>
+<td>All</td>
+<td><code>pointsAvailable</code></td>
+</tr>
+<tr>
+<td><strong>PPM</strong> — Points Per Match</td>
+<td>—</td>
+<td>Team points ÷ matches played</td>
+<td>All</td>
+<td><code>ppm</code></td>
+</tr>
+<tr>
+<td><strong>PPI</strong> — Points Per Inning</td>
+<td>—</td>
+<td>9-Ball points ÷ effective innings; 9-Ball SL basis</td>
+<td>9B</td>
+<td><code>ppi</code></td>
+</tr>
+<tr>
+<td><strong>Put-up</strong></td>
+<td>—</td>
+<td>Team nominating its player for the next match slot</td>
+<td>All</td>
+<td><code>POST /team-matches/{id}/put-up</code>; <code>first_put_up</code>; block reasons <code>would_break_23</code>, <code>already_put_up</code>, <code>not_on_roster</code>, <code>side_complete</code></td>
+</tr>
+<tr>
+<td><strong>23-SL cap</strong></td>
+<td>—</td>
+<td>Max sum of SL of the 5 players a team uses in one night</td>
+<td>8B, 9B</td>
+<td>DB <code>divisions.skill_level_cap</code>, JSON <code>skillLevelCap</code></td>
+</tr>
+<tr>
+<td><strong>Score matching / Verification</strong></td>
+<td>—</td>
+<td>Both captains confirm results → bonus +1 (8B) / +10 (9B)</td>
+<td>All</td>
+<td><span class="badge b-target">Target</span> Phase 2. MVP equivalent: <strong>Submit</strong> (<code>status = submitted</code>)</td>
+</tr>
+<tr>
+<td><strong>Forfeit</strong></td>
+<td>Xử thua</td>
+<td>Slot not played; opponent gets max points; fees still due</td>
+<td>All</td>
+<td><code>FORFEIT_SLOT</code></td>
+</tr>
+<tr>
+<td><strong>Bye</strong></td>
+<td>Nghỉ</td>
+<td>Week with no opponent</td>
+<td>All</td>
+<td><code>BYE</code></td>
+</tr>
+<tr>
+<td><strong>No Play</strong></td>
+<td>Nghỉ lễ</td>
+<td>Holiday week</td>
+<td>All</td>
+<td><code>NO_PLAY</code></td>
+</tr>
+<tr>
+<td><strong>Session</strong> = <strong>Season</strong></td>
+<td>Mùa giải</td>
+<td>Seasonal block (Spring/Summer/Fall) of 10–17 weeks. The business docs say &quot;session&quot;; <strong>the code says <code>season</code></strong> (<code>seasons</code> table, <code>/seasons</code>)</td>
+<td>All</td>
+<td><code>season</code></td>
+</tr>
+<tr>
+<td><strong>Division</strong></td>
+<td>Bảng đấu</td>
+<td>Teams of one format playing the same night in one area</td>
+<td>All</td>
+<td><code>division</code></td>
+</tr>
+<tr>
+<td><strong>LO</strong> — League Operator</td>
+<td>Nhà điều hành giải</td>
+<td>Runs a league territory; admin power user</td>
+<td>—</td>
+<td>Today: role <code>ADMIN</code>. <span class="badge b-target">Target</span><code>LEAGUE_OPERATOR</code> when multi-league tenancy arrives</td>
+</tr>
+<tr>
+<td><strong>Host Location</strong></td>
+<td>Câu lạc bộ chủ nhà</td>
+<td>Partner billiard club / venue</td>
+<td>—</td>
+<td><code>venue</code></td>
+</tr>
+<tr>
+<td><strong>Member ID</strong></td>
+<td>Mã hội viên</td>
+<td>8 digits (e.g. <code>95007620</code>); generated <code>YYMMNNNN</code> in Phase 2</td>
+<td>—</td>
+<td>DB <code>member_id</code>, JSON <code>memberId</code></td>
+</tr>
+<tr>
+<td><strong>Team ID</strong></td>
+<td>Mã đội</td>
+<td>5 digits, APA-style today (<code>03209</code>); generated <code>RRVVT</code> is TBD</td>
+<td>—</td>
+<td>DB <code>team_number</code>, JSON <code>teamNumber</code></td>
+</tr>
+<tr>
+<td><strong>Master division</strong></td>
+<td>Bảng Master</td>
+<td>Open, uncapped, international rules, jump shots allowed</td>
+<td>Master</td>
+<td><code>MASTER</code></td>
+</tr>
+<tr>
+<td><strong>Sandbagging</strong></td>
+<td>Giấu hạng</td>
+<td>Deliberately playing worse to lower SL</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><strong>Night</strong></td>
+<td>Đêm thi đấu</td>
+<td>One team match (5 individual matches) on a league night</td>
+<td>All</td>
+<td><code>team_match</code>; FE <code>night.ts</code></td>
+</tr>
+<tr>
+<td><strong>Submit</strong></td>
+<td>Nộp kết quả</td>
+<td>Captain finalizes a complete night; standings count only submitted nights</td>
+<td>All</td>
+<td><code>team_matches.status = &#39;submitted&#39;</code></td>
+</tr>
+<tr>
+<td><strong>Paid member</strong></td>
+<td>Hội viên đã đóng phí</td>
+<td>Member whose dues are paid; only these can be added to a roster</td>
+<td>All</td>
+<td><code>players.is_paid</code></td>
+</tr>
+</tbody></table></div>
+
+</article>
+</main>
+<script src="assets/site-data.js"></script>
+<script src="assets/layout.js"></script>
+<script src="assets/search-index.js"></script>
+<script src="assets/site.js"></script>
+</body>
+</html>

@@ -1,0 +1,538 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>17 - Night Operations: Put-up, Result, Submit · MViP Solution Design</title>
+<link rel="stylesheet" href="../assets/site.css">
+<script src="../assets/boot.js"></script>
+</head>
+<body data-root="../" data-page="features/E04-night-operations.html">
+<main id="main" class="content">
+<article class="doc">
+<h1>17 - Night Operations: Put-up, Result, Submit</h1>
+<p class="lede">Epic E04 · 4 features</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Goal</strong></td>
+<td>A captain runs all 5 matches of a night on a phone: put up players within the 23 cap, enter each result, submit</td>
+</tr>
+<tr>
+<td><strong>Phase</strong></td>
+<td>1 (F13–F15) · 2 (F39b forfeits)</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><span class="badge b-parked">Parked</span> Screens parked in league-fe · <span class="badge b-missing">Missing</span> endpoints and rule functions missing (E02)</td>
+</tr>
+<tr>
+<td><strong>Actors</strong></td>
+<td>Home captain, Away captain, Admin</td>
+</tr>
+<tr>
+<td><strong>Related</strong></td>
+<td><a href="../04-domain-rules.html">04 §4–§5</a> · <a href="../08-scorekeeping-engine.html">08 §0</a> · <a href="E02-league-foundation.html#f08">E02-F8</a></td>
+</tr>
+</tbody></table></div>
+<h2 id="features-by-phase"><span class="secnum">17.1</span> Features by phase</h2>
+<h3 id="phase-1"><span class="secnum">17.1.1</span> Phase 1</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>Feature</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">F13</td>
+<td><a href="E04-night-operations.html#f13">Put-up with 23-SL cap</a></td>
+<td><span class="badge b-parked">Parked</span></td>
+</tr>
+<tr>
+<td class="nw">F14</td>
+<td><a href="E04-night-operations.html#f14">Result entry</a></td>
+<td><span class="badge b-parked">Parked</span></td>
+</tr>
+<tr>
+<td class="nw">F15</td>
+<td><a href="E04-night-operations.html#f15">Submit night</a></td>
+<td><span class="badge b-parked">Parked</span></td>
+</tr>
+</tbody></table></div>
+<h3 id="phase-2"><span class="secnum">17.1.2</span> Phase 2</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>Feature</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">F39b</td>
+<td><a href="E04-night-operations.html#f39b">Forfeits</a></td>
+<td><span class="badge b-target">Target</span></td>
+</tr>
+</tbody></table></div>
+<h2 id="phase-1-deep-dive"><span class="secnum">17.2</span> Phase 1 deep dive</h2>
+<h3 id="components"><span class="secnum">17.2.1</span> Components</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E04-night-operations-1.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E04-night-operations-1.svg" alt="Diagram: 17 - Night Operations: Put-up, Result, Submit" loading="lazy" data-diagram-file="features_E04-night-operations-1.svg" width="2204" height="506"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_E04-night-operations-1.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="main-flow-one-match-slot"><span class="secnum">17.2.2</span> Main flow: one match slot</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E04-night-operations-2.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E04-night-operations-2.svg" alt="Diagram: 17 - Night Operations: Put-up, Result, Submit" loading="lazy" data-diagram-file="features_E04-night-operations-2.svg" width="1405" height="999"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_E04-night-operations-2.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h2 id="phase-2-deep-dive"><span class="secnum">17.3</span> Phase 2 deep dive</h2>
+<p><strong>Scope:</strong> <a href="E04-night-operations.html#f39b">F39b Forfeits</a>. Phase 1 assumes both sides always field five players. Phase 2 lets a short-handed side forfeit a slot after a grace period. Live scoring of each rack (E07) and dual-captain verification (E08) build on this epic&#39;s result and submit steps.</p>
+<h3 id="components-what-phase-2-adds"><span class="secnum">17.3.1</span> Components: what Phase 2 adds</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E04-night-operations-3.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E04-night-operations-3.svg" alt="Diagram: 17 - Night Operations: Put-up, Result, Submit" loading="lazy" data-diagram-file="features_E04-night-operations-3.svg" width="1725" height="280"></a><figcaption><span>Red: the scoring trigger is still missing in Phase 1 (E02-F8) and gains the forfeit branch here.</span><a class="full" href="../assets/diagrams/features_E04-night-operations-3.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="night-flow-with-a-forfeit"><span class="secnum">17.3.2</span> Night flow with a forfeit</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E04-night-operations-4.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E04-night-operations-4.svg" alt="Diagram: 17 - Night Operations: Put-up, Result, Submit" loading="lazy" data-diagram-file="features_E04-night-operations-4.svg" width="772" height="893"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_E04-night-operations-4.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="data-delta"><span class="secnum">17.3.3</span> Data delta</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Change</th>
+<th>Why</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>individual_matches.forfeit_side text NULL CHECK (forfeit_side IN (&#39;home&#39;,&#39;away&#39;))</code></td>
+<td>Marks the slot</td>
+</tr>
+<tr>
+<td>One player row may be null when <code>forfeit_side</code> is set</td>
+<td>The forfeiting side fields nobody</td>
+</tr>
+<tr>
+<td><code>fn_score_individual_match</code>: forfeit → 3/0 (8-Ball) or 20/0 (9-Ball), MP unchanged</td>
+<td class="nw">R-037</td>
+</tr>
+<tr>
+<td><code>nextAction()</code> gains <code>forfeit-available {order, side}</code></td>
+<td>The bar offers the action</td>
+</tr>
+</tbody></table></div>
+
+<h2 id="f13"><span class="secnum">17.4</span> F13 — Put-up with 23-SL cap</h2>
+<section class="feature"><div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>Status</th>
+<th>Rules</th>
+<th>Repo refs</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1</td>
+<td><span class="badge b-parked">Parked</span></td>
+<td>R-030/031 (MVP order), R-034, R-035, R-036, R-050</td>
+<td><code>_parked/src/pages/PutUpPage.tsx</code>, <code>components/league/PutUpCandidateList.tsx</code>, <code>lib/night.ts</code>, <code>lib/rules.ts</code> (<code>skillLevelUsed</code>, <code>raceFor</code>)</td>
+</tr>
+</tbody></table></div>
+<h3 id="f13-requirements"><span class="secnum">17.4.1</span> Requirements</h3>
+<p><em>As a captain, I pick my player for the next match and can&#39;t accidentally break the 23 cap.</em></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Requirement</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">FR-13.1</td>
+<td>The screen is active only when <code>nextAction = put-up</code>, which supplies <code>order</code> and <code>side</code></td>
+</tr>
+<tr>
+<td class="nw">FR-13.2</td>
+<td>Order: home puts up first in odd matches, away in even matches. The second picker sees the first pick (the opponent panel)</td>
+</tr>
+<tr>
+<td class="nw">FR-13.3</td>
+<td>Candidates come from <code>GET /available?side&amp;match_order</code> (<code>staleTime 0</code>), each with <code>canPutUp</code> and <code>blockReason</code></td>
+</tr>
+<tr>
+<td class="nw">FR-13.4</td>
+<td>Block reasons and copy: <code>would_break_23</code> &quot;Would break 23&quot; · <code>already_put_up</code> &quot;Already playing tonight&quot; · <code>not_on_roster</code> &quot;Not on this roster&quot; · <code>side_complete</code> &quot;Five players already put up&quot;</td>
+</tr>
+<tr>
+<td class="nw">FR-13.5</td>
+<td>Blocked rows stay visible <strong>and focusable</strong> (<code>aria-disabled</code>), muted, with a warn badge. Tapping one does nothing</td>
+</tr>
+<tr>
+<td class="nw">FR-13.6</td>
+<td>Badge &quot;SL used {used}/{cap}&quot; sums the side&#39;s snapshot SLs; the badge turns warn when <code>used = cap</code></td>
+</tr>
+<tr>
+<td class="nw">FR-13.7</td>
+<td>Once the opponent is known, each selectable row previews the race &quot;mine–theirs&quot; (<code>raceFor</code>)</td>
+</tr>
+<tr>
+<td class="nw">FR-13.8</td>
+<td>Confirm posts the put-up. The server re-checks <code>can_put_up()</code>. A refusal returns <code>40004</code>, which clears the selection and refetches the list</td>
+</tr>
+<tr>
+<td class="nw">FR-13.9</td>
+<td>After success: if both sides are now up, go to result entry; otherwise stay on the same screen for the other side</td>
+</tr>
+<tr>
+<td class="nw">FR-13.10</td>
+<td>Accessibility: <code>role=radiogroup</code> &quot;Select a player&quot;, rows are <code>role=radio</code> with <code>aria-checked</code>, at least 56 px tall</td>
+</tr>
+</tbody></table></div>
+<h3 id="f13-rules--logic"><span class="secnum">17.4.2</span> Rules &amp; logic</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E04-night-operations-f13-1.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E04-night-operations-f13-1.svg" alt="Diagram: 17 - Night Operations: Put-up, Result, Submit" loading="lazy" data-diagram-file="features_E04-night-operations-f13-1.svg" width="709" height="1160"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_E04-night-operations-f13-1.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<p>Worked example (seed): 03209 has used SL 5 + 6 + 5 + 4 = 20 after 4 matches. With cap 23, match 5 allows SL 2 and 3, and greys out SL 4+ with &quot;Would break 23&quot;. The badge reads <code>20/23</code>.</p>
+<h3 id="f13-ui-states"><span class="secnum">17.4.3</span> UI states</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>State</th>
+<th>Shown</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Loading</td>
+<td>List skeleton</td>
+</tr>
+<tr>
+<td>Error</td>
+<td><code>ErrorBanner</code> + Retry (refetch available)</td>
+</tr>
+<tr>
+<td>Empty</td>
+<td>&quot;No players available&quot; · &quot;Every player on this roster is already playing or would break 23.&quot;</td>
+</tr>
+<tr>
+<td>Rejected (<code>40004</code>)</td>
+<td>&quot;That player can no longer be put up. The list has changed.&quot; Selection cleared, list refetched</td>
+</tr>
+<tr>
+<td>Not my turn / not my night</td>
+<td>Route shows read-only &quot;Waiting for {other side}&quot; (server is authoritative)</td>
+</tr>
+</tbody></table></div>
+<h3 id="f13-edge-cases"><span class="secnum">17.4.4</span> Edge cases</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Situation</th>
+<th>Expected</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">EC-13.1</td>
+<td>Both captains confirm at the same moment for the same side</td>
+<td>One insert wins; the other gets <code>40004</code></td>
+</tr>
+<tr>
+<td class="nw">EC-13.2</td>
+<td>Admin changes a player&#39;s SL while the list is open</td>
+<td>The server uses the new SL; a stale list may be refused (<code>40004</code>)</td>
+</tr>
+<tr>
+<td class="nw">EC-13.3</td>
+<td>Team has fewer than 5 eligible players</td>
+<td>Forfeit path (F39b)</td>
+</tr>
+<tr>
+<td class="nw">EC-13.4</td>
+<td>Captain opens put-up for the side that isn&#39;t next</td>
+<td>Server refuses (<code>40004</code>); UI shows the waiting state</td>
+</tr>
+</tbody></table></div>
+<h3 id="f13-acceptance-criteria"><span class="secnum">17.4.5</span> Acceptance criteria</h3>
+<ul>
+<li><strong>AC-13.1</strong> Given 20 SL used, then SL 4+ rows are greyed &quot;Would break 23&quot;, SL 2–3 are selectable, and the badge reads <code>20/23</code>.</li>
+<li><strong>AC-13.2</strong> Match 1 asks home first; match 2 asks away first.</li>
+<li><strong>AC-13.3</strong> After both sides are up, the row has <code>home/away_skill_level</code> and <code>home/away_race</code> filled by the trigger.</li>
+</ul>
+<h3 id="f13-implementation-gaps-_parked"><span class="secnum">17.4.6</span> Implementation gaps (<code>_parked</code>)</h3>
+<ul>
+<li>The badge never turns warn at the cap.</li>
+<li>The selection isn&#39;t cleared on error.</li>
+<li>The second picker&#39;s subtitle is wrong (away picking second sees &quot;Away puts up first&quot;).</li>
+<li>No <code>viewerCanManage</code> check on the route.</li>
+<li>The copy key <code>putUp.staleList</code> is unused (two different wordings exist).</li>
+</ul>
+</section>
+
+<h2 id="f14"><span class="secnum">17.5</span> F14 — Result entry</h2>
+<section class="feature"><div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>Status</th>
+<th>Rules</th>
+<th>Repo refs</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1</td>
+<td><span class="badge b-parked">Parked</span></td>
+<td>§5.3 points, R-100/102 (totals only in MVP)</td>
+<td><code>_parked/src/pages/ResultPage.tsx</code>, <code>components/league/{Stepper,ResultVerdict}.tsx</code>, <code>lib/rules.ts</code> (<code>pointsFor</code>), <code>lib/schemas.ts</code> (<code>resultSchema</code>)</td>
+</tr>
+</tbody></table></div>
+<h3 id="f14-requirements"><span class="secnum">17.5.1</span> Requirements</h3>
+<p><em>After the match is played, I enter the games each player won, the innings and the defensive shots, and the app shows the points.</em></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Requirement</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">FR-14.1</td>
+<td>Title &quot;Match {n} of 5&quot;. Two lines: &quot;{name} (SL {sl}) races to {race}&quot;, using the <strong>snapshot</strong> SL and race</td>
+</tr>
+<tr>
+<td class="nw">FR-14.2</td>
+<td>Games stepper per player, from 0 to the player&#39;s race (+ disabled at the race), with a &quot;/ {race}&quot; suffix</td>
+</tr>
+<tr>
+<td class="nw">FR-14.3</td>
+<td>One innings stepper per match (≥ 0), and one defensive-shots stepper per player (≥ 0)</td>
+</tr>
+<tr>
+<td class="nw">FR-14.4</td>
+<td>Live verdict from <code>pointsFor</code>: pending → &quot;Enter games to see the result.&quot; · invalid → &quot;That score is not possible.&quot; · complete → &quot;{winner} wins {w}–{l}&quot; + &quot;{wp}–{lp} points&quot;</td>
+</tr>
+<tr>
+<td class="nw">FR-14.5</td>
+<td>Save is enabled only when <code>resultSchema</code> passes: games ≤ race and exactly one player at the race</td>
+</tr>
+<tr>
+<td class="nw">FR-14.6</td>
+<td>Saving uses <code>PUT /individual-matches/{id}/result</code>. <strong>The response&#39;s points replace the preview</strong></td>
+</tr>
+<tr>
+<td class="nw">FR-14.7</td>
+<td>After saving, go straight to the next action (the next put-up, or the submit drawer)</td>
+</tr>
+<tr>
+<td class="nw">FR-14.8</td>
+<td>A captain can correct a result until the night is submitted. Afterwards only an admin can</td>
+</tr>
+</tbody></table></div>
+<h3 id="f14-logic-client-validation-resultschema"><span class="secnum">17.5.2</span> Logic: client validation (<code>resultSchema</code>)</h3>
+<div class="code"><span class="code-lang">text</span><button class="copy" type="button">Copy</button><pre><code class="lang-text">homeGames, awayGames  ∈ ℕ, ≤ their race
+innings, homeDefShots, awayDefShots ∈ ℕ
+exactly one of (homeGames = homeRace, awayGames = awayRace)</code></pre></div>
+<p>The server&#39;s <code>fn_score_individual_match</code> re-validates the same rules and computes the points (see the <a href="E02-league-foundation.html#f08">E02-F8 diagram</a>).</p>
+<h3 id="f14-flow"><span class="secnum">17.5.3</span> Flow</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E04-night-operations-f14-1.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E04-night-operations-f14-1.svg" alt="Diagram: 17 - Night Operations: Put-up, Result, Submit" loading="lazy" data-diagram-file="features_E04-night-operations-f14-1.svg" width="1327" height="787"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_E04-night-operations-f14-1.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="f14-edge-cases"><span class="secnum">17.5.4</span> Edge cases</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Situation</th>
+<th>Expected</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">EC-14.1</td>
+<td>The preview mirror disagrees with the server</td>
+<td>The server wins; log a mirror-drift test failure</td>
+</tr>
+<tr>
+<td class="nw">EC-14.2</td>
+<td>User types 9 in a race-4 stepper</td>
+<td>Clamped to 4</td>
+</tr>
+<tr>
+<td class="nw">EC-14.3</td>
+<td>Innings left at 0</td>
+<td>Allowed (the MVP doesn&#39;t validate innings); show a soft warning</td>
+</tr>
+<tr>
+<td class="nw">EC-14.4</td>
+<td>Session expired while editing</td>
+<td>401 → login; the draft is lost (see EC-2.1)</td>
+</tr>
+<tr>
+<td class="nw">EC-14.5</td>
+<td>Night already submitted, opened by a captain</td>
+<td>Read-only verdict, no Save</td>
+</tr>
+</tbody></table></div>
+<h3 id="f14-acceptance-criteria"><span class="secnum">17.5.5</span> Acceptance criteria</h3>
+<ul>
+<li><strong>AC-14.1</strong> A race-3 stepper stops at 3, with + disabled.</li>
+<li><strong>AC-14.2</strong> Saving 3–0 returns <code>homePoints: 3, awayPoints: 0</code>, and the night total rolls up.</li>
+<li><strong>AC-14.3</strong> 4–3, both race 4 → 2/1 (hill).</li>
+</ul>
+<h3 id="f14-implementation-gaps-_parked"><span class="secnum">17.5.6</span> Implementation gaps (<code>_parked</code>)</h3>
+<ul>
+<li>The PUT response is ignored, and the screen returns to the night page instead of the next action.</li>
+<li>No Retry on error.</li>
+<li>No read-only state for a submitted night or a non-manager.</li>
+<li>Stepper aria-labels don&#39;t include the player&#39;s name.</li>
+</ul>
+</section>
+
+<h2 id="f15"><span class="secnum">17.6</span> F15 — Submit night</h2>
+<section class="feature"><div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>Status</th>
+<th>Rules</th>
+<th>Repo refs</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1</td>
+<td><span class="badge b-parked">Parked</span></td>
+<td><a href="../04-domain-rules.html">04 §8 MVP note</a>, <a href="../14-open-questions.html">Q30</a></td>
+<td><code>_parked/src/components/league/SubmitNightSheet.tsx</code>, <code>hooks/useLeagueMutations.ts</code> (<code>useSubmitNight</code>)</td>
+</tr>
+</tbody></table></div>
+<h3 id="f15-requirements"><span class="secnum">17.6.1</span> Requirements</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Requirement</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">FR-15.1</td>
+<td>Available only when all 5 matches are complete and the night isn&#39;t submitted</td>
+</tr>
+<tr>
+<td class="nw">FR-15.2</td>
+<td>Confirmation is a vaul <strong>drawer</strong>, never <code>window.confirm</code>. &quot;Submit this night?&quot; · &quot;Scores are final for captains after submitting. An admin can still make corrections.&quot; · Cancel (focused first) · Submit night</td>
+</tr>
+<tr>
+<td class="nw">FR-15.3</td>
+<td>The server sets <code>status = submitted</code>, <code>submitted_by</code>, <code>submitted_at</code>. It refuses an incomplete night with <code>40001</code></td>
+</tr>
+<tr>
+<td class="nw">FR-15.4</td>
+<td>After submit: the night is read-only for captains; the bar shows &quot;Submitted by {user name} · {time}&quot;; the standings include the night</td>
+</tr>
+<tr>
+<td class="nw">FR-15.5</td>
+<td>Who may submit: either captain of the night, or an admin (default for <a href="../14-open-questions.html">Q30</a>)</td>
+</tr>
+</tbody></table></div>
+<h3 id="f15-logic"><span class="secnum">17.6.2</span> Logic</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E04-night-operations-f15-1.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E04-night-operations-f15-1.svg" alt="Diagram: 17 - Night Operations: Put-up, Result, Submit" loading="lazy" data-diagram-file="features_E04-night-operations-f15-1.svg" width="1258" height="352"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_E04-night-operations-f15-1.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="f15-edge-cases"><span class="secnum">17.6.3</span> Edge cases</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Situation</th>
+<th>Expected</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">EC-15.1</td>
+<td>Both captains tap Submit</td>
+<td>The first succeeds; the second gets a 200 no-op, or <code>40001</code> &quot;already submitted&quot; (pick one: idempotent 200 recommended)</td>
+</tr>
+<tr>
+<td class="nw">EC-15.2</td>
+<td>Admin corrects a result after submit</td>
+<td>Points re-roll; standings update; audited in Phase 2 (F41)</td>
+</tr>
+<tr>
+<td class="nw">EC-15.3</td>
+<td>Cancel in the drawer</td>
+<td>Nothing changes</td>
+</tr>
+</tbody></table></div>
+<h3 id="f15-acceptance-criteria"><span class="secnum">17.6.4</span> Acceptance criteria</h3>
+<ul>
+<li><strong>AC-15.1</strong> After submit, the captain sees no editable control and the admin still does.</li>
+<li><strong>AC-15.2</strong> The score in the summary equals <code>team_matches.home_points–away_points</code>, and the halves add up to the sum of the 5 matches&#39; 3, 3 or 2 points, <strong>not</strong> always 15.</li>
+</ul>
+<h3 id="f15-implementation-gaps-_parked"><span class="secnum">17.6.5</span> Implementation gaps (<code>_parked</code>)</h3>
+<ul>
+<li>&quot;Submitted by&quot; shows the home team&#39;s name; the submitter and time aren&#39;t rendered, although <code>submittedAt</code> exists.</li>
+<li>The plan&#39;s check &quot;halves sum to 15&quot; contradicts the 3/3/2 rule. Correct the test.</li>
+</ul>
+</section>
+
+<h2 id="f39b"><span class="secnum">17.7</span> F39b — Forfeits</h2>
+<section class="feature"><div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>Status</th>
+<th>Rules</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>2</td>
+<td><span class="badge b-target">Target</span></td>
+<td>R-037, <a href="../14-open-questions.html">Q15/Q16</a></td>
+</tr>
+</tbody></table></div>
+<h3 id="f39b-requirements"><span class="secnum">17.7.1</span> Requirements</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Requirement</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>FR-39b.1</td>
+<td>A captain or admin can forfeit a slot when their side has no eligible player (after a 15 min grace period from the scheduled start)</td>
+</tr>
+<tr>
+<td>FR-39b.2</td>
+<td>The opponent&#39;s player is still put up and recorded, and gets the maximum points: 3 (8-Ball) or 20 (9-Ball). The forfeiting side gets 0. No match counts as played for either player&#39;s MP</td>
+</tr>
+<tr>
+<td>FR-39b.3</td>
+<td>New columns: <code>individual_matches.forfeit_side</code>; <code>fn_score_individual_match</code> handles it</td>
+</tr>
+<tr>
+<td>FR-39b.4</td>
+<td>Both teams still owe weekly fees (F36)</td>
+</tr>
+</tbody></table></div>
+<h3 id="f39b-flow"><span class="secnum">17.7.2</span> Flow</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E04-night-operations-f39b-1.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E04-night-operations-f39b-1.svg" alt="Diagram: 17 - Night Operations: Put-up, Result, Submit" loading="lazy" data-diagram-file="features_E04-night-operations-f39b-1.svg" width="1330" height="509"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_E04-night-operations-f39b-1.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="f39b-acceptance-criteria"><span class="secnum">17.7.3</span> Acceptance criteria</h3>
+<ul>
+<li><strong>AC-39b.1</strong> A forfeited slot shows &quot;Forfeit&quot; in the scoresheet, awards the maximum points to the opponent, and doesn&#39;t change either player&#39;s MP.</li>
+</ul>
+</section>
+
+</article>
+</main>
+<script src="../assets/site-data.js"></script>
+<script src="../assets/layout.js"></script>
+<script src="../assets/search-index.js"></script>
+<script src="../assets/site.js"></script>
+</body>
+</html>

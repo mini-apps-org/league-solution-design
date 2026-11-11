@@ -1,0 +1,564 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>18 - Roster &amp; Player Admin · MViP Solution Design</title>
+<link rel="stylesheet" href="../assets/site.css">
+<script src="../assets/boot.js"></script>
+</head>
+<body data-root="../" data-page="features/E05-roster-admin.html">
+<main id="main" class="content">
+<article class="doc">
+<h1>18 - Roster &amp; Player Admin</h1>
+<p class="lede">Epic E05 · 6 features</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Goal</strong></td>
+<td>Captains keep rosters filled with paid members. Admins find players, change skill levels with a reason, and move players between teams, all traceable</td>
+</tr>
+<tr>
+<td><strong>Phase</strong></td>
+<td>1 (F16–F19) · 2 (F39c roster lock + one team per division, F41 audit log)</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><span class="badge b-parked">Parked</span> Screens parked · <span class="badge b-missing">Missing</span> endpoints and <code>change_skill_level()</code> missing (E02)</td>
+</tr>
+<tr>
+<td><strong>Actors</strong></td>
+<td>Captain, Admin</td>
+</tr>
+<tr>
+<td><strong>Related</strong></td>
+<td><a href="../04-domain-rules.html">04 §3, §10</a> · <a href="../06-data-model.html">06 B.1</a> · <a href="../11-security-and-roles.html">11 §2</a></td>
+</tr>
+</tbody></table></div>
+<h2 id="features-by-phase"><span class="secnum">18.1</span> Features by phase</h2>
+<h3 id="phase-1"><span class="secnum">18.1.1</span> Phase 1</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>Feature</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">F16</td>
+<td><a href="E05-roster-admin.html#f16">Add paid member</a></td>
+<td><span class="badge b-parked">Parked</span></td>
+</tr>
+<tr>
+<td class="nw">F17</td>
+<td><a href="E05-roster-admin.html#f17">Player search</a></td>
+<td><span class="badge b-parked">Parked</span></td>
+</tr>
+<tr>
+<td class="nw">F18</td>
+<td><a href="E05-roster-admin.html#f18">Skill-level change &amp; history</a></td>
+<td><span class="badge b-parked">Parked</span></td>
+</tr>
+<tr>
+<td class="nw">F19</td>
+<td><a href="E05-roster-admin.html#f19">Player transfer</a></td>
+<td><span class="badge b-parked">Parked</span></td>
+</tr>
+</tbody></table></div>
+<h3 id="phase-2"><span class="secnum">18.1.2</span> Phase 2</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>Feature</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">F39c</td>
+<td><a href="E05-roster-admin.html#f39c">Roster lock</a></td>
+<td><span class="badge b-target">Target</span></td>
+</tr>
+<tr>
+<td class="nw">F41</td>
+<td><a href="E05-roster-admin.html#f41">Audit log</a></td>
+<td><span class="badge b-target">Target</span></td>
+</tr>
+</tbody></table></div>
+<h2 id="phase-1-deep-dive"><span class="secnum">18.2</span> Phase 1 deep dive</h2>
+<h3 id="components"><span class="secnum">18.2.1</span> Components</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E05-roster-admin-1.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E05-roster-admin-1.svg" alt="Diagram: 18 - Roster &amp; Player Admin" loading="lazy" data-diagram-file="features_E05-roster-admin-1.svg" width="1462" height="654"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_E05-roster-admin-1.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="main-flow-admin-changes-a-skill-level"><span class="secnum">18.2.2</span> Main flow: admin changes a skill level</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E05-roster-admin-2.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E05-roster-admin-2.svg" alt="Diagram: 18 - Roster &amp; Player Admin" loading="lazy" data-diagram-file="features_E05-roster-admin-2.svg" width="1501" height="806"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_E05-roster-admin-2.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h2 id="phase-2-deep-dive"><span class="secnum">18.3</span> Phase 2 deep dive</h2>
+<p><strong>Scope:</strong> <a href="E05-roster-admin.html#f39c">F39c Roster lock and one team per division</a> and <a href="E05-roster-admin.html#f41">F41 Audit log</a>. Phase 1 lets admins and captains change rosters at any time. Phase 2 enforces the league bylaws (per-division membership, lock after week 4, no adds mid-night) and records every sensitive change.</p>
+<h3 id="components-what-phase-2-adds"><span class="secnum">18.3.1</span> Components: what Phase 2 adds</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E05-roster-admin-3.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E05-roster-admin-3.svg" alt="Diagram: 18 - Roster &amp; Player Admin" loading="lazy" data-diagram-file="features_E05-roster-admin-3.svg" width="1269" height="491"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_E05-roster-admin-3.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="key-flow-a-late-roster-add"><span class="secnum">18.3.2</span> Key flow: a late roster add</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E05-roster-admin-4.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E05-roster-admin-4.svg" alt="Diagram: 18 - Roster &amp; Player Admin" loading="lazy" data-diagram-file="features_E05-roster-admin-4.svg" width="1539" height="556"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_E05-roster-admin-4.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="data-delta"><span class="secnum">18.3.3</span> Data delta</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Change</th>
+<th>Why</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>team_rosters.division_id</code> + <code>UNIQUE (player_id, division_id) WHERE left_at IS NULL</code></td>
+<td>Replaces the Phase 1 single-active-roster index</td>
+</tr>
+<tr>
+<td><code>leagues.bylaws jsonb</code> (<code>roster_lock_week</code>, <code>allow_multi_division_same_night</code>)</td>
+<td>Rules are configured, not hard-coded</td>
+</tr>
+<tr>
+<td>New <code>roster_requests (id, team_id, player_id, requested_by, status, decided_by, decided_at)</code></td>
+<td>Late adds wait for approval</td>
+</tr>
+<tr>
+<td>New <code>audit_log (id, at, actor_user_id, action, entity, entity_id, before jsonb, after jsonb, reason)</code> with no UPDATE or DELETE grant</td>
+<td>Tamper-evident history (F41)</td>
+</tr>
+</tbody></table></div>
+
+<h2 id="f16"><span class="secnum">18.4</span> F16 — Add paid member to roster</h2>
+<section class="feature"><div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>Status</th>
+<th>Rules</th>
+<th>Repo refs</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1</td>
+<td><span class="badge b-parked">Parked</span></td>
+<td>R-014, R-017</td>
+<td><code>_parked/src/components/league/AddPaidMemberSheet.tsx</code>, <code>RosterPanel.tsx</code> · <code>useAddRosterPlayer</code></td>
+</tr>
+</tbody></table></div>
+<h3 id="f16-requirements"><span class="secnum">18.4.1</span> Requirements</h3>
+<p><em>As a captain, I add a paid member to my roster before the night starts.</em></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Requirement</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">FR-16.1</td>
+<td>&quot;Add paid member&quot; appears on the captain&#39;s own roster panel only while the night isn&#39;t submitted. Admins always see it</td>
+</tr>
+<tr>
+<td class="nw">FR-16.2</td>
+<td>A drawer searches players (≥ 2 chars): SL, name, member ID, and an &quot;Unpaid&quot; flag</td>
+</tr>
+<tr>
+<td class="nw">FR-16.3</td>
+<td>Unpaid members stay visible but their Add button is disabled, so the refusal makes sense</td>
+</tr>
+<tr>
+<td class="nw">FR-16.4</td>
+<td><code>POST /teams/{teamId}/roster {playerId}</code>. The server refuses unpaid players with <code>40003</code> &quot;That member has not paid dues for this division yet.&quot;</td>
+</tr>
+<tr>
+<td class="nw">FR-16.5</td>
+<td>The server refuses a player who already has an active roster (F7 index) with <code>40001</code></td>
+</tr>
+<tr>
+<td class="nw">FR-16.6</td>
+<td>On success the drawer closes and the roster refetches</td>
+</tr>
+</tbody></table></div>
+<h3 id="f16-logic"><span class="secnum">18.4.2</span> Logic</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E05-roster-admin-f16-1.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E05-roster-admin-f16-1.svg" alt="Diagram: 18 - Roster &amp; Player Admin" loading="lazy" data-diagram-file="features_E05-roster-admin-f16-1.svg" width="830" height="1139"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_E05-roster-admin-f16-1.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="f16-edge-cases"><span class="secnum">18.4.3</span> Edge cases</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Situation</th>
+<th>Expected</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">EC-16.1</td>
+<td>Member pays during the night</td>
+<td>Admin flips <code>is_paid</code>; the captain retries</td>
+</tr>
+<tr>
+<td class="nw">EC-16.2</td>
+<td>Captain adds a player during match 3</td>
+<td>Allowed in the MVP (the R-017 &quot;before match 1&quot; rule is Phase 2, F39c)</td>
+</tr>
+<tr>
+<td class="nw">EC-16.3</td>
+<td>Captain tries to poach a player from another team</td>
+<td>400; only an admin can transfer</td>
+</tr>
+</tbody></table></div>
+<h3 id="f16-acceptance-criteria"><span class="secnum">18.4.4</span> Acceptance criteria</h3>
+<ul>
+<li><strong>AC-16.1</strong> A player-role user doesn&#39;t see &quot;Add paid member&quot;; the captain does.</li>
+<li><strong>AC-16.2</strong> Adding a seeded unpaid player returns <code>40003</code> with the copy above.</li>
+</ul>
+<h3 id="f16-implementation-gaps-_parked"><span class="secnum">18.4.5</span> Implementation gaps (<code>_parked</code>)</h3>
+<ul>
+<li>The button isn&#39;t hidden after the night is submitted.</li>
+</ul>
+</section>
+
+<h2 id="f17"><span class="secnum">18.5</span> F17 — Player search (admin)</h2>
+<section class="feature"><div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>Status</th>
+<th>Repo refs</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1</td>
+<td><span class="badge b-parked">Parked</span></td>
+<td><code>_parked/src/pages/admin/PlayersPage.tsx</code> · <code>usePlayerSearch</code></td>
+</tr>
+</tbody></table></div>
+<h3 id="f17-requirements"><span class="secnum">18.5.1</span> Requirements</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Requirement</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">FR-17.1</td>
+<td><code>/admin/players</code> is behind <code>RequireAdmin</code>. Non-admins see the <code>40304</code> empty state. The server also refuses them</td>
+</tr>
+<tr>
+<td class="nw">FR-17.2</td>
+<td>Search input &quot;Name or member ID&quot; with a clear (X) button. The query runs at ≥ 2 trimmed chars, <strong>debounced 300 ms</strong></td>
+</tr>
+<tr>
+<td class="nw">FR-17.3</td>
+<td><code>GET /players?q=</code> matches <code>full_name ILIKE</code> or a <code>member_id</code> prefix. <code>LIKE</code> input is escaped (<code>\ % _</code>)</td>
+</tr>
+<tr>
+<td class="nw">FR-17.4</td>
+<td>Rows (≥ 56 px): SL square, name, member ID, team number or &quot;No team&quot;. Tap → player drawer (F18, F19)</td>
+</tr>
+<tr>
+<td class="nw">FR-17.5</td>
+<td>States: under 2 chars &quot;Type at least two characters.&quot; · no match &quot;No players match that search.&quot; · loading skeleton · error banner</td>
+</tr>
+<tr>
+<td class="nw">FR-17.6</td>
+<td>Results are bounded (limit 50) with keyset paging (fix <a href="../14-open-questions.html">Q37</a> first)</td>
+</tr>
+<tr>
+<td class="nw">FR-17.7</td>
+<td>At ≥ 1024 px: a table (Name, Member ID, SL, Team, Points) with a 400 px side rail for the drawer</td>
+</tr>
+</tbody></table></div>
+<h3 id="f17-acceptance-criteria"><span class="secnum">18.5.2</span> Acceptance criteria</h3>
+<ul>
+<li><strong>AC-17.1</strong> A partial name and a partial member ID both find the seeded player.</li>
+<li><strong>AC-17.2</strong> Searching <code>100%</code> matches the literal text only.</li>
+</ul>
+<h3 id="f17-implementation-gaps-_parked"><span class="secnum">18.5.3</span> Implementation gaps (<code>_parked</code>)</h3>
+<ul>
+<li>No debounce.</li>
+<li>The desktop table layout isn&#39;t built.</li>
+<li>The 403 copy uses the generic <code>40304</code> text instead of &quot;You don&#39;t have permission to do that.&quot;</li>
+</ul>
+</section>
+
+<h2 id="f18"><span class="secnum">18.6</span> F18 — Skill-level change and history</h2>
+<section class="feature"><div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>Status</th>
+<th>Rules</th>
+<th>Repo refs</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1</td>
+<td><span class="badge b-parked">Parked</span></td>
+<td>R-050, R-120, R-125</td>
+<td><code>_parked/src/components/league/SkillLevelPanel.tsx</code>, <code>lib/schemas.ts</code> (<code>skillLevelChangeSchema</code>)</td>
+</tr>
+</tbody></table></div>
+<h3 id="f18-requirements"><span class="secnum">18.6.1</span> Requirements</h3>
+<p><em>As an admin, I change a player&#39;s skill level with a reason, and anyone with access can see why it changed.</em></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Requirement</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">FR-18.1</td>
+<td>Six toggle buttons, SL 2–7 (44 px, <code>aria-pressed</code>). The current level is accent; the pending choice is primary</td>
+</tr>
+<tr>
+<td class="nw">FR-18.2</td>
+<td>Preview: &quot;vs SL 5: races to {now} (was {before})&quot;, shown only when the level changed</td>
+</tr>
+<tr>
+<td class="nw">FR-18.3</td>
+<td>Static note: &quot;Applies from the next match. Played matches keep their snapshot.&quot;</td>
+</tr>
+<tr>
+<td class="nw">FR-18.4</td>
+<td>Reason is required (trimmed, ≥ 1 char): &quot;Required. Shown in this player&#39;s history.&quot;</td>
+</tr>
+<tr>
+<td class="nw">FR-18.5</td>
+<td>Save is enabled only if valid <strong>and</strong> changed. Calls <code>change_skill_level()</code> via <code>POST /players/{id}/skill-level</code></td>
+</tr>
+<tr>
+<td class="nw">FR-18.6</td>
+<td>History is append-only: &quot;old → new&quot;, reason, &quot;by {admin} · {date}&quot;. Empty: &quot;No changes yet.&quot; With loading and error states</td>
+</tr>
+<tr>
+<td class="nw">FR-18.7</td>
+<td>After saving: invalidate the player list and history; reset the form</td>
+</tr>
+</tbody></table></div>
+<h3 id="f18-logic"><span class="secnum">18.6.2</span> Logic</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E05-roster-admin-f18-1.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E05-roster-admin-f18-1.svg" alt="Diagram: 18 - Roster &amp; Player Admin" loading="lazy" data-diagram-file="features_E05-roster-admin-f18-1.svg" width="546" height="1168"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_E05-roster-admin-f18-1.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="f18-edge-cases"><span class="secnum">18.6.3</span> Edge cases</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Situation</th>
+<th>Expected</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">EC-18.1</td>
+<td>Player is put up but the opponent isn&#39;t yet (no snapshot)</td>
+<td>The snapshot is taken when both sides are up, so the new SL applies. Acceptable; documented</td>
+</tr>
+<tr>
+<td class="nw">EC-18.2</td>
+<td>Two admins change the same player at once</td>
+<td>Both succeed in order; history shows both</td>
+</tr>
+<tr>
+<td class="nw">EC-18.3</td>
+<td>9-Ball SL</td>
+<td>Phase 2 (F32): per-format SL table</td>
+</tr>
+</tbody></table></div>
+<h3 id="f18-acceptance-criteria"><span class="secnum">18.6.4</span> Acceptance criteria</h3>
+<ul>
+<li><strong>AC-18.1</strong> Save stays disabled for an empty or whitespace-only reason.</li>
+<li><strong>AC-18.2</strong> 4 → 6 adds a history row &quot;4 → 6&quot; with the reason and the admin&#39;s name; played matches still show SL 4.</li>
+<li><strong>AC-18.3</strong> The preview for SL 6 vs SL 5 reads 5–4.</li>
+</ul>
+<h3 id="f18-implementation-gaps-_parked"><span class="secnum">18.6.5</span> Implementation gaps (<code>_parked</code>)</h3>
+<ul>
+<li>The preview renders even when the level is unchanged.</li>
+<li>History has no loading or error state.</li>
+</ul>
+</section>
+
+<h2 id="f19"><span class="secnum">18.7</span> F19 — Player transfer</h2>
+<section class="feature"><div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>Status</th>
+<th>Rules</th>
+<th>Repo refs</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1</td>
+<td><span class="badge b-parked">Parked</span></td>
+<td>R-020, FR-7.6</td>
+<td><code>_parked/src/pages/admin/PlayersPage.tsx</code> (transfer) · <code>useTransferPlayer</code></td>
+</tr>
+</tbody></table></div>
+<h3 id="f19-requirements"><span class="secnum">18.7.1</span> Requirements</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Requirement</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">FR-19.1</td>
+<td>In the player drawer, a select lists &quot;No team&quot; plus the teams of <strong>the player&#39;s division</strong> (not just the first division)</td>
+</tr>
+<tr>
+<td class="nw">FR-19.2</td>
+<td>&quot;Transfer&quot; calls <code>POST /teams/{toTeamId}/roster {playerId}</code> as admin. The server closes the old active row (<code>left_at = now()</code>) and opens the new one in <strong>one transaction</strong></td>
+</tr>
+<tr>
+<td class="nw">FR-19.3</td>
+<td>&quot;No team&quot; closes the active row without opening a new one</td>
+</tr>
+<tr>
+<td class="nw">FR-19.4</td>
+<td>Success shows a toast &quot;Moved to {team}&quot;; the player list and rosters refetch</td>
+</tr>
+<tr>
+<td class="nw">FR-19.5</td>
+<td>Played matches keep the old team context (they reference the player, not the roster)</td>
+</tr>
+</tbody></table></div>
+<h3 id="f19-flow"><span class="secnum">18.7.2</span> Flow</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E05-roster-admin-f19-1.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E05-roster-admin-f19-1.svg" alt="Diagram: 18 - Roster &amp; Player Admin" loading="lazy" data-diagram-file="features_E05-roster-admin-f19-1.svg" width="1164" height="465"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_E05-roster-admin-f19-1.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="f19-acceptance-criteria"><span class="secnum">18.7.3</span> Acceptance criteria</h3>
+<ul>
+<li><strong>AC-19.1</strong> After a transfer, the player appears on the new roster for future nights, and past nights are unchanged.</li>
+</ul>
+<h3 id="f19-implementation-gaps-_parked"><span class="secnum">18.7.4</span> Implementation gaps (<code>_parked</code>)</h3>
+<ul>
+<li>The team list is taken from the first division only.</li>
+<li>No success feedback.</li>
+</ul>
+</section>
+
+<h2 id="f39c"><span class="secnum">18.8</span> F39c — Roster lock and one team per division</h2>
+<section class="feature"><div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>Status</th>
+<th>Rules</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>2</td>
+<td><span class="badge b-target">Target</span></td>
+<td>R-011, R-012, R-013, R-016, R-017, <a href="../14-open-questions.html">Q24</a>, <a href="../14-open-questions.html">Q32</a></td>
+</tr>
+</tbody></table></div>
+<h3 id="f39c-requirements"><span class="secnum">18.8.1</span> Requirements</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Requirement</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>FR-39c.1</td>
+<td>Replace the single-active-roster index with <strong>one active roster per division</strong>: <code>UNIQUE (player_id, division_id) WHERE left_at IS NULL</code> (denormalize <code>division_id</code>)</td>
+</tr>
+<tr>
+<td>FR-39c.2</td>
+<td>Same night, different divisions: allowed only if the league bylaw <code>allow_multi_division_same_night</code> is true</td>
+</tr>
+<tr>
+<td>FR-39c.3</td>
+<td>Roster changes after week 4 (<code>roster_lock_week</code>) need admin approval: the captain&#39;s add becomes a pending request</td>
+</tr>
+<tr>
+<td>FR-39c.4</td>
+<td>Captain adds during a night are allowed only before match 1 starts</td>
+</tr>
+</tbody></table></div>
+<h3 id="f39c-logic"><span class="secnum">18.8.2</span> Logic</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E05-roster-admin-f39c-1.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E05-roster-admin-f39c-1.svg" alt="Diagram: 18 - Roster &amp; Player Admin" loading="lazy" data-diagram-file="features_E05-roster-admin-f39c-1.svg" width="751" height="1198"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_E05-roster-admin-f39c-1.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="f39c-acceptance-criteria"><span class="secnum">18.8.3</span> Acceptance criteria</h3>
+<ul>
+<li><strong>AC-39c.1</strong> A player can be active on a Monday team and a Wednesday team, but not on two Wednesday teams in the same division.</li>
+</ul>
+</section>
+
+<h2 id="f41"><span class="secnum">18.9</span> F41 — Audit log</h2>
+<section class="feature"><div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>Status</th>
+<th>Rules</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>2</td>
+<td><span class="badge b-target">Target</span></td>
+<td><a href="../11-security-and-roles.html">11 §5</a>, NFR-10</td>
+</tr>
+</tbody></table></div>
+<h3 id="f41-requirements"><span class="secnum">18.9.1</span> Requirements</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Requirement</th>
+</tr>
+</thead>
+<tbody><tr>
+<td class="nw">FR-41.1</td>
+<td>Table <code>audit_log (id, actor_user_id, action, entity_type, entity_id, before jsonb, after jsonb, reason, ip, created_at)</code>. Append-only (no UPDATE/DELETE grants)</td>
+</tr>
+<tr>
+<td class="nw">FR-41.2</td>
+<td>Logged actions: SL change, roster add / transfer / remove, admin result correction, post-submit edits, dispute resolution, role grants, payment overrides</td>
+</tr>
+<tr>
+<td class="nw">FR-41.3</td>
+<td>Written in the <strong>same transaction</strong> as the change</td>
+</tr>
+<tr>
+<td class="nw">FR-41.4</td>
+<td>Admin UI: filter by entity, actor and date; show a before/after diff</td>
+</tr>
+<tr>
+<td class="nw">FR-41.5</td>
+<td>Retention 5 years (NFR-14)</td>
+</tr>
+</tbody></table></div>
+<h3 id="f41-flow"><span class="secnum">18.9.2</span> Flow</h3>
+<figure class="diagram"><a class="diagram-img" href="../assets/diagrams/features_E05-roster-admin-f41-1.svg" target="_blank" aria-label="Open diagram full screen"><img src="../assets/diagrams/features_E05-roster-admin-f41-1.svg" alt="Diagram: 18 - Roster &amp; Player Admin" loading="lazy" data-diagram-file="features_E05-roster-admin-f41-1.svg" width="1028" height="465"></a><figcaption><span></span><a class="full" href="../assets/diagrams/features_E05-roster-admin-f41-1.svg" target="_blank">Open full screen</a></figcaption></figure>
+
+
+<h3 id="f41-acceptance-criteria"><span class="secnum">18.9.3</span> Acceptance criteria</h3>
+<ul>
+<li><strong>AC-41.1</strong> Every privileged action in FR-41.2 produces exactly one audit row, with before and after values.</li>
+</ul>
+</section>
+
+</article>
+</main>
+<script src="../assets/site-data.js"></script>
+<script src="../assets/layout.js"></script>
+<script src="../assets/search-index.js"></script>
+<script src="../assets/site.js"></script>
+</body>
+</html>
